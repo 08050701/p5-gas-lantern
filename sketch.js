@@ -2,7 +2,7 @@
 // 重要：若文字非常長，為了「完整出現且不砍斷」，會在愛心同一面上每 2.5 秒自動切換下一頁。
 // 其餘功能保持：一面自拍、一面願望+AI回覆、Step流程、大字不重疊、5秒期間也看得到愛心與文字。
 
-let state = "wish"; // "wish" | "selfie" | "final" | "saved" | "release_fx" | "release"
+let state = "scene"; // "scene" | "wish" | "selfie" | "final" | "saved" | "release_fx" | "release"
 // ★ 貼上你的 Apps Script 網頁應用程式網址（部署後拿到的 https://script.google.com/macros/s/.../exec）
 const GAS_URL = "https://script.google.com/macros/s/AKfycby8mJZ1G2s4XTW0xiTznLSxSBp7n1jXhQnU9QoMmvzhUzW7Hol-3eryjZgvIMPZslikMQ/exec";
 
@@ -31,6 +31,48 @@ const FRAME_OPTIONS = {
   frameDream: { key: "dream", label: "夢幻紫" },
   frameClassic: { key: "classic", label: "經典白" },
 };
+
+// --- 願望扭蛋場景 ---
+const SCENE_THEMES = {
+  garden: {
+    label: "晨光花園", icon: "✿",
+    skyTop: [104, 181, 231], skyBottom: [255, 224, 185],
+    accent: [255, 122, 168], ground: [76, 139, 85],
+  },
+  day: {
+    label: "晴朗白日", icon: "☀",
+    skyTop: [72, 164, 242], skyBottom: [202, 238, 255],
+    accent: [255, 217, 92], ground: [95, 176, 113],
+  },
+  sunset: {
+    label: "金色黃昏", icon: "◒",
+    skyTop: [79, 72, 142], skyBottom: [255, 160, 103],
+    accent: [255, 205, 112], ground: [68, 58, 94],
+  },
+  night: {
+    label: "星願夜空", icon: "✦",
+    skyTop: [7, 11, 32], skyBottom: [30, 35, 76],
+    accent: [255, 225, 132], ground: [18, 28, 58],
+  },
+  beach: {
+    label: "海風藍岸", icon: "≈",
+    skyTop: [67, 171, 225], skyBottom: [255, 220, 171],
+    accent: [106, 225, 234], ground: [234, 206, 145],
+  },
+};
+let selectedSceneKey = "night";
+let scenePreviewKey = "night";
+let gachaSpinning = false;
+let gachaResultReady = false;
+let gachaStartMs = 0;
+let gachaParticles = [];
+const GACHA_SPIN_MS = 1900;
+
+// --- 掃碼領取拍貼 ---
+let pickupState = "idle"; // idle | uploading | ready | error
+let pickupQrImg = null;
+let pickupClaimUrl = "";
+let pickupError = "";
 
 // --- 語音辨識 ---
 let recognition = null;
@@ -131,6 +173,7 @@ function windowResized() {
 }
 
 function draw() {
+  updateGacha();
   background(5, 8, 20);
   drawSky3D();
 
@@ -304,6 +347,10 @@ function prepareSelfieStep() {
   selfieImg = null;
   selfieShots = [];
   cameraError = "";
+  pickupState = "idle";
+  pickupQrImg = null;
+  pickupClaimUrl = "";
+  pickupError = "";
 }
 
 function cancelWishInput() {
@@ -322,21 +369,26 @@ function buildButtons() {
   const bottomY = VH - 120;
 
   buttons = {
-    holdRecord: new CanvasButton(centerX, centerY, bigW, bigH, "按著錄音", "hold"),
+    gachaSpin: new CanvasButton(VW / 2 - 220, bottomY, 440, 92, "轉動願望扭蛋", "tap", "primary"),
+    gachaAgain: new CanvasButton(VW / 2 - 330, bottomY, 280, 84, "再抽一次", "tap", "secondary"),
+    gachaContinue: new CanvasButton(VW / 2 + 10, bottomY, 360, 84, "帶著場景許願", "tap", "primary"),
 
-    takePhoto: new CanvasButton(VW / 2 - 180, bottomY, 360, 84, "開啟相機", "tap"),
-    photoRedo: new CanvasButton(VW / 2 - 320, bottomY, 280, 84, "重拍三張", "tap"),
-    photoNext: new CanvasButton(VW / 2 + 40, bottomY, 280, 84, "使用這組", "tap"),
+    holdRecord: new CanvasButton(centerX, centerY, bigW, bigH, "按著錄音", "hold", "primary"),
 
-    frameHearts: new CanvasButton(862, 270, 150, 58, "愛心粉", "tap"),
-    frameStars: new CanvasButton(1030, 270, 150, 58, "星光金", "tap"),
-    frameDream: new CanvasButton(862, 344, 150, 58, "夢幻紫", "tap"),
-    frameClassic: new CanvasButton(1030, 344, 150, 58, "經典白", "tap"),
+    takePhoto: new CanvasButton(VW / 2 - 180, bottomY, 360, 84, "開啟相機", "tap", "primary"),
+    photoRedo: new CanvasButton(VW / 2 - 320, bottomY, 280, 84, "重拍三張", "tap", "secondary"),
+    photoNext: new CanvasButton(VW / 2 + 40, bottomY, 280, 84, "使用這組", "tap", "primary"),
 
-    saveLantern: new CanvasButton(VW / 2 - 190, bottomY, 380, 92, "儲存天燈", "tap"),
+    frameHearts: new CanvasButton(862, 270, 150, 58, "愛心粉", "tap", "choice"),
+    frameStars: new CanvasButton(1030, 270, 150, 58, "星光金", "tap", "choice"),
+    frameDream: new CanvasButton(862, 344, 150, 58, "夢幻紫", "tap", "choice"),
+    frameClassic: new CanvasButton(1030, 344, 150, 58, "經典白", "tap", "choice"),
 
-    backToStart: new CanvasButton(VW / 2 - 320, bottomY, 280, 84, "回到開始", "tap"),
-    releaseAll: new CanvasButton(VW / 2 + 40, bottomY, 280, 84, "釋放天燈", "tap"),
+    saveLantern: new CanvasButton(VW / 2 - 190, bottomY, 380, 92, "儲存天燈", "tap", "primary"),
+    retryPickup: new CanvasButton(836, 496, 260, 58, "重新產生 QR", "tap", "choice"),
+
+    backToStart: new CanvasButton(VW / 2 - 320, bottomY, 280, 84, "回到開始", "tap", "secondary"),
+    releaseAll: new CanvasButton(VW / 2 + 40, bottomY, 280, 84, "釋放天燈", "tap", "primary"),
   };
 }
 
@@ -399,6 +451,17 @@ function hitTestButton(x, y) {
 }
 
 function onButtonClick(id) {
+  if (state === "scene") {
+    if ((id === "gachaSpin" || id === "gachaAgain") && !gachaSpinning) {
+      startGachaSpin();
+      return;
+    }
+    if (id === "gachaContinue" && gachaResultReady && !gachaSpinning) {
+      state = "wish";
+      return;
+    }
+  }
+
   if (state === "selfie") {
     if (FRAME_OPTIONS[id] && !boothShooting) {
       selectedFrameStyle = FRAME_OPTIONS[id].key;
@@ -444,11 +507,16 @@ function onButtonClick(id) {
         .catch(() => heart.setReply("我在，慢慢來就好"));
 
       state = "saved";
+      preparePhotoPickup(selfieImg);
       return;
     }
   }
 
   if (state === "saved") {
+    if (id === "retryPickup" && pickupState === "error") {
+      preparePhotoPickup(selfieImg);
+      return;
+    }
     if (id === "backToStart") { resetToStart(); return; }
     if (id === "releaseAll") {
       if (lanterns.length === 0) return;
@@ -465,9 +533,15 @@ function onButtonClick(id) {
 function resetToStart() {
   cancelBoothSequence();
   stopCamera();
-  state = "wish";
+  state = "scene";
+  gachaResultReady = false;
+  gachaSpinning = false;
   selfieImg = null;
   selfieShots = [];
+  pickupState = "idle";
+  pickupQrImg = null;
+  pickupClaimUrl = "";
+  pickupError = "";
   liveWishText = "";
   finalWishText = "";
   stopPianoLoop();
@@ -482,13 +556,20 @@ function enterReleaseFx() {
 }
 
 function getVisibleButtons() {
+  if (state === "scene") {
+    if (gachaSpinning) return [];
+    return gachaResultReady ? ["gachaAgain", "gachaContinue"] : ["gachaSpin"];
+  }
   if (state === "wish") return ["holdRecord"];
   if (state === "selfie") {
     const frames = boothShooting ? [] : Object.keys(FRAME_OPTIONS);
     return selfieImg ? [...frames, "photoRedo", "photoNext"] : [...frames, "takePhoto"];
   }
   if (state === "final") return ["saveLantern"];
-  if (state === "saved") return ["backToStart", "releaseAll"];
+  if (state === "saved") {
+    const retry = pickupState === "error" ? ["retryPickup"] : [];
+    return [...retry, "backToStart", "releaseAll"];
+  }
   if (state === "release_fx" || state === "release") return ["backToStart"];
   return [];
 }
@@ -546,17 +627,11 @@ function drawHUD() {
   const lines = max(1, sub.split("\n").length);
   const headerBottom = subY + lines * subSize * 1.55;
 
+  if (state === "scene") drawGachaScreen(headerBottom + 6);
   if (state === "selfie") drawCameraScreen(headerBottom + 18);
   if (state === "final") drawFinalPreview(headerBottom + 18);
 
-  if (state === "saved") {
-    const msgY = max(VH * 0.22, headerBottom + 50);
-    hud.textAlign(CENTER, TOP);
-    hud.fill(255, 240, 180);
-    hud.textSize(40);
-    hud.textLeading(40 * 1.6);
-    hud.text("STEP 4\n請選擇：\n釋放天燈 或 回到開始", VW / 2, msgY);
-  }
+  if (state === "saved") drawSavedPickupScreen(headerBottom + 18);
 
   if (state === "release_fx") {
     const y = max(90, headerBottom + 20);
@@ -572,6 +647,7 @@ function drawHUD() {
   hud.textSize(16);
   hud.fill(220);
   hud.text(`天燈數量：${lanterns.length}`, VW - 24, 20);
+  if (state !== "scene") drawCurrentSceneBadge();
 
   const visible = getVisibleButtons();
   if (buttons.takePhoto) {
@@ -594,11 +670,37 @@ function drawHUD() {
 
 function isButtonHot(id) {
   if (FRAME_OPTIONS[id] && FRAME_OPTIONS[id].key === selectedFrameStyle) return true;
-  if (!pointerDown) return false;
-  return pointerDownId === id;
+  if (pointerDown && pointerDownId === id) return true;
+  if (typeof mouseX === "number" && typeof mouseY === "number" && buttons[id]) {
+    const p = pointerToHUD(mouseX, mouseY);
+    return buttons[id].hit(p.x, p.y);
+  }
+  return false;
+}
+
+function drawCurrentSceneBadge() {
+  const scene = SCENE_THEMES[selectedSceneKey] || SCENE_THEMES.night;
+  const pulse = 0.5 + 0.5 * sin(frameCount * 0.045);
+  hud.noStroke();
+  hud.fill(8, 12, 31, 145);
+  roundedRect(hud, 22, 18, 196, 50, 20);
+  hud.noFill();
+  hud.stroke(...scene.accent, 130 + 80 * pulse);
+  hud.strokeWeight(2);
+  roundedRect(hud, 22, 18, 196, 50, 20);
+  hud.noStroke();
+  hud.fill(...scene.accent, 245);
+  hud.textAlign(CENTER, CENTER);
+  hud.textSize(25);
+  hud.text(scene.icon, 52, 43);
+  hud.fill(255);
+  hud.textAlign(LEFT, CENTER);
+  hud.textSize(19);
+  hud.text(scene.label, 76, 43);
 }
 
 function getTitleText() {
+  if (state === "scene") return "願望扭蛋機";
   if (state === "wish") return "STEP 1";
   if (state === "selfie") return "STEP 2｜願望拍貼機";
   if (state === "final") return "STEP 3";
@@ -608,6 +710,11 @@ function getTitleText() {
 }
 
 function getSubtitleText() {
+  if (state === "scene") {
+    if (gachaSpinning) return "命運場景正在滾動…";
+    if (gachaResultReady) return `你抽到｜${SCENE_THEMES[selectedSceneKey].label}`;
+    return "轉動扭蛋，抽出今天的願望場景";
+  }
   if (state === "wish") return micHolding ? "放開就完成" : "按住錄音";
   if (state === "selfie") {
     if (selfieImg) return "三張拍貼完成，可換相框或重新拍攝";
@@ -617,10 +724,164 @@ function getSubtitleText() {
     return camWorking() ? "選好相框後，按一次開始三連拍" : "先選相框，再開啟相機";
   }
   if (state === "final") return "按下儲存天燈";
-  if (state === "saved") return "接下來要做什麼？";
+  if (state === "saved") {
+    if (pickupState === "ready") return "掃描 QR，把願望拍貼帶走";
+    if (pickupState === "error") return "QR 產生失敗，照片仍保留在這一頁";
+    return "正在製作你的專屬領取 QR…";
+  }
   if (state === "release_fx") return "5 秒後升空";
   if (state === "release") return "天燈升空中";
   return "";
+}
+
+function startGachaSpin() {
+  gachaSpinning = true;
+  gachaResultReady = false;
+  gachaStartMs = millis();
+  gachaParticles = [];
+}
+
+function updateGacha() {
+  if (!gachaSpinning) return;
+  const keys = Object.keys(SCENE_THEMES);
+  const elapsed = millis() - gachaStartMs;
+  scenePreviewKey = keys[floor(elapsed / 120) % keys.length];
+
+  if (elapsed >= GACHA_SPIN_MS) {
+    const choices = keys.filter((key) => key !== selectedSceneKey);
+    selectedSceneKey = random(choices);
+    scenePreviewKey = selectedSceneKey;
+    gachaSpinning = false;
+    gachaResultReady = true;
+    burstGachaParticles();
+  }
+}
+
+function burstGachaParticles() {
+  const palette = SCENE_THEMES[selectedSceneKey];
+  gachaParticles = [];
+  for (let i = 0; i < 64; i++) {
+    const a = random(-PI, 0);
+    const speed = random(2.5, 8.5);
+    gachaParticles.push({
+      x: VW / 2,
+      y: 395,
+      vx: cos(a) * speed,
+      vy: sin(a) * speed - random(1, 4),
+      life: random(70, 120),
+      size: random(5, 13),
+      col: random([palette.accent, [255, 255, 255], [255, 191, 223]]),
+      rot: random(TWO_PI),
+    });
+  }
+}
+
+function drawGachaScreen(yTop) {
+  const y = min(yTop, 188);
+  const cx = VW / 2;
+  const globeY = y + 135;
+  const globeR = 145;
+  const sceneKey = gachaSpinning ? scenePreviewKey : selectedSceneKey;
+  const scene = SCENE_THEMES[sceneKey];
+
+  hud.noStroke();
+  hud.fill(8, 12, 31, 130);
+  roundedRect(hud, 240, y - 16, 800, 390, 42);
+  hud.fill(255, 255, 255, 18);
+  roundedRect(hud, 260, y, 760, 350, 34);
+
+  // 透明球罩內的扭蛋會持續漂動，轉動時速度加快。
+  const ctx = hud.drawingContext;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, globeY, globeR - 8, 0, Math.PI * 2);
+  ctx.clip();
+  hud.fill(15, 22, 54, 220);
+  hud.ellipse(cx, globeY, globeR * 2, globeR * 2);
+
+  const sceneKeys = Object.keys(SCENE_THEMES);
+  for (let i = 0; i < 14; i++) {
+    const speed = gachaSpinning ? 0.085 : 0.018;
+    const angle = i * 2.17 + frameCount * speed * (i % 2 ? 1 : -1);
+    const radius = 35 + (i % 4) * 24;
+    const px = cx + cos(angle) * radius;
+    const py = globeY + sin(angle * 1.3) * radius * 0.72 + 28;
+    const key = sceneKeys[i % sceneKeys.length];
+    drawGachaCapsule(hud, px, py, 31, angle, SCENE_THEMES[key]);
+  }
+  ctx.restore();
+
+  hud.noFill();
+  hud.stroke(255, 245, 220, 220);
+  hud.strokeWeight(8);
+  hud.ellipse(cx, globeY, globeR * 2, globeR * 2);
+  hud.stroke(255, 255, 255, 80);
+  hud.strokeWeight(4);
+  hud.arc(cx - 24, globeY - 18, globeR * 1.35, globeR * 1.35, PI + 0.2, TWO_PI - 0.25);
+
+  // 機台與會轉動的把手。
+  hud.noStroke();
+  hud.fill(255, 118, 160);
+  roundedRect(hud, cx - 176, globeY + 112, 352, 132, 34);
+  hud.fill(255, 224, 105);
+  roundedRect(hud, cx - 144, globeY + 142, 288, 76, 26);
+  hud.fill(68, 35, 74);
+  hud.textAlign(CENTER, CENTER);
+  hud.textStyle(BOLD);
+  hud.textSize(30);
+  hud.text(gachaResultReady ? `${scene.icon} ${scene.label}` : "WISH GACHA", cx, globeY + 180);
+  hud.textStyle(NORMAL);
+
+  hud.push();
+  hud.translate(cx + 205, globeY + 170);
+  hud.rotate(gachaSpinning ? frameCount * 0.24 : -0.35);
+  hud.fill(255, 225, 115);
+  hud.ellipse(0, 0, 62, 62);
+  hud.fill(255, 247, 216);
+  roundedRect(hud, -8, -10, 88, 20, 10);
+  hud.fill(255, 118, 160);
+  hud.ellipse(82, 0, 34, 34);
+  hud.pop();
+
+  drawGachaParticles();
+}
+
+function drawGachaCapsule(g, x, y, size, angle, scene) {
+  g.push();
+  g.translate(x, y);
+  g.rotate(angle * 0.35);
+  g.noStroke();
+  g.fill(...scene.accent, 245);
+  g.arc(0, 0, size * 2, size * 2, PI, TWO_PI, CHORD);
+  g.fill(250, 249, 255, 245);
+  g.arc(0, 0, size * 2, size * 2, 0, PI, CHORD);
+  g.stroke(255, 255, 255, 185);
+  g.strokeWeight(3);
+  g.line(-size, 0, size, 0);
+  g.noStroke();
+  g.fill(55, 37, 72);
+  g.textAlign(CENTER, CENTER);
+  g.textSize(size * 0.8);
+  g.text(scene.icon, 0, size * 0.32);
+  g.pop();
+}
+
+function drawGachaParticles() {
+  for (const p of gachaParticles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.12;
+    p.life -= 1;
+    p.rot += 0.08;
+    hud.push();
+    hud.translate(p.x, p.y);
+    hud.rotate(p.rot);
+    hud.noStroke();
+    hud.fill(...p.col, constrain(p.life * 2.2, 0, 230));
+    hud.rect(-p.size / 2, -p.size / 2, p.size, p.size, 3);
+    hud.pop();
+  }
+  gachaParticles = gachaParticles.filter((p) => p.life > 0 && p.y < VH + 40);
 }
 
 function drawCameraScreen(yTop) {
@@ -983,6 +1244,150 @@ function drawFinalPreview(yTop) {
   hud.text(wrapText(finalWishText || liveWishText || "", 18), x + 22, y + 78);
 }
 
+function drawSavedPickupScreen(yTop) {
+  const x = 80;
+  const y = min(yTop, 184);
+  const w = 1120;
+  const h = 378;
+  const theme = SCENE_THEMES[selectedSceneKey] || SCENE_THEMES.night;
+
+  hud.noStroke();
+  hud.fill(9, 13, 34, 205);
+  roundedRect(hud, x, y, w, h, 34);
+  hud.noFill();
+  hud.stroke(...theme.accent, 185);
+  hud.strokeWeight(3);
+  roundedRect(hud, x, y, w, h, 34);
+
+  if (selfieImg) {
+    hud.noStroke();
+    hud.fill(255, 255, 255, 25);
+    roundedRect(hud, x + 28, y + 28, 322, 322, 26);
+    hud.image(selfieImg, x + 39, y + 39, 300, 300);
+  }
+
+  hud.noStroke();
+  hud.fill(255);
+  hud.textAlign(LEFT, TOP);
+  hud.textStyle(BOLD);
+  hud.textSize(32);
+  hud.text("願望拍貼已完成", x + 382, y + 42);
+  hud.textStyle(NORMAL);
+  hud.fill(224, 228, 249);
+  hud.textSize(22);
+  hud.textLeading(34);
+  const copy = pickupState === "ready"
+    ? "拿手機掃描右側 QR Code\n即可開啟並下載這張拍貼。"
+    : (pickupState === "error"
+      ? `目前無法產生領取連結。\n${pickupError || "請稍後重試。"}`
+      : "正在把拍貼安全送到領取頁…\n通常只需要幾秒鐘。");
+  hud.text(copy, x + 382, y + 98);
+
+  hud.fill(...theme.accent, 225);
+  roundedRect(hud, x + 382, y + 212, 300, 52, 18);
+  hud.fill(35, 28, 55);
+  hud.textAlign(CENTER, CENTER);
+  hud.textSize(22);
+  hud.text(`${theme.icon} ${theme.label}`, x + 532, y + 238);
+
+  const qrX = x + 802;
+  const qrY = y + 54;
+  hud.fill(255);
+  roundedRect(hud, qrX, qrY, 252, 252, 22);
+
+  if (pickupState === "ready" && pickupQrImg) {
+    hud.image(pickupQrImg, qrX + 16, qrY + 16, 220, 220);
+  } else if (pickupState === "error") {
+    hud.fill(255, 122, 150);
+    hud.textAlign(CENTER, CENTER);
+    hud.textSize(68);
+    hud.text("!", qrX + 126, qrY + 112);
+    hud.fill(95, 62, 82);
+    hud.textSize(20);
+    hud.text("請重試", qrX + 126, qrY + 176);
+  } else {
+    for (let i = 0; i < 10; i++) {
+      const a = frameCount * 0.1 + i * TWO_PI / 10;
+      const alpha = map(i, 0, 9, 45, 230);
+      hud.fill(...theme.accent, alpha);
+      hud.ellipse(qrX + 126 + cos(a) * 54, qrY + 126 + sin(a) * 54, 14, 14);
+    }
+  }
+
+  hud.fill(208, 214, 239);
+  hud.textAlign(CENTER, TOP);
+  hud.textSize(18);
+  hud.text("掃碼後可直接儲存照片", qrX + 126, qrY + 318);
+}
+
+async function preparePhotoPickup(img) {
+  if (!img) {
+    pickupState = "error";
+    pickupError = "找不到拍貼照片";
+    return;
+  }
+
+  pickupState = "uploading";
+  pickupQrImg = null;
+  pickupClaimUrl = "";
+  pickupError = "";
+
+  try {
+    const sourceCanvas = img.canvas;
+    if (!sourceCanvas || typeof sourceCanvas.toDataURL !== "function") {
+      throw new Error("照片格式無法轉換");
+    }
+    const imageData = sourceCanvas.toDataURL("image/jpeg", 0.88);
+    const res = await fetch(GAS_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "savePhoto",
+        imageData,
+        wish: (finalWishText || "").slice(0, 160),
+        scene: selectedSceneKey,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok || !data.claimUrl) throw new Error(data.error || "後端沒有回傳領取網址");
+    pickupClaimUrl = String(data.claimUrl);
+    pickupQrImg = await createQrTexture(pickupClaimUrl);
+    pickupState = "ready";
+  } catch (err) {
+    pickupState = "error";
+    pickupError = (err && err.message ? err.message : "照片上傳失敗").slice(0, 42);
+  }
+}
+
+function createQrTexture(text) {
+  return new Promise((resolve, reject) => {
+    const host = document.getElementById("qrStage");
+    if (!host || typeof QRCode === "undefined") {
+      reject(new Error("QR 元件尚未載入"));
+      return;
+    }
+    host.innerHTML = "";
+    new QRCode(host, {
+      text,
+      width: 240,
+      height: 240,
+      colorDark: "#19152f",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+
+    setTimeout(() => {
+      const canvas = host.querySelector("canvas");
+      const imageEl = host.querySelector("img");
+      const dataUrl = canvas ? canvas.toDataURL("image/png") : (imageEl && imageEl.src);
+      if (!dataUrl) {
+        reject(new Error("QR 圖片建立失敗"));
+        return;
+      }
+      loadImage(dataUrl, resolve, () => reject(new Error("QR 圖片讀取失敗")));
+    }, 80);
+  });
+}
+
 // ==================================================
 // 星空
 // ==================================================
@@ -1002,29 +1407,153 @@ function initStars() {
 }
 
 function drawSky3D() {
+  const key = gachaSpinning ? scenePreviewKey : selectedSceneKey;
+  const theme = SCENE_THEMES[key] || SCENE_THEMES.night;
   push();
   translate(0, 0, -900);
   noStroke();
 
-  for (let i = 0; i < 24; i++) {
-    const t = i / 23;
-    fill(5 + 8 * t, 8 + 10 * t, 20 + 20 * t, 200);
+  const topCol = color(...theme.skyTop);
+  const bottomCol = color(...theme.skyBottom);
+  for (let i = 0; i < 30; i++) {
+    const t = i / 29;
+    const c = lerpColor(topCol, bottomCol, t);
+    fill(red(c), green(c), blue(c), 255);
     push();
-    translate(0, map(t, 0, 1, 250, -250), 0);
-    plane(width * 2, height / 10);
+    translate(0, map(t, 0, 1, -height * 0.62, height * 0.62), 0);
+    plane(width * 2.1, height / 12 + 3);
     pop();
   }
 
-  const warmA = color(255, 190, 110);
-  const warmB = color(255, 240, 190);
-  for (const s of stars) {
-    const tw = s.base + 0.4 * sin(frameCount * s.tw + s.off);
-    const c = lerpColor(warmA, warmB, s.warm);
-    stroke(red(c), green(c), blue(c), 120 + 120 * tw);
-    strokeWeight(1.5);
-    point(s.x * 0.6, s.y * 0.6, s.z);
+  if (key === "night" || key === "sunset") {
+    const warmA = color(255, 190, 110);
+    const warmB = color(255, 248, 214);
+    for (const s of stars) {
+      const tw = s.base + 0.4 * sin(frameCount * s.tw + s.off);
+      const c = lerpColor(warmA, warmB, s.warm);
+      stroke(red(c), green(c), blue(c), (key === "night" ? 120 : 35) + 120 * tw);
+      strokeWeight(key === "night" ? 1.8 : 1.1);
+      point(s.x * 0.6, s.y * 0.6, s.z + 720);
+    }
+    noStroke();
   }
+
+  drawSceneFeatures3D(key, theme);
   pop();
+}
+
+function drawSceneFeatures3D(key, theme) {
+  const drift = sin(frameCount * 0.006) * width * 0.04;
+
+  if (key === "day") {
+    fill(255, 229, 115, 245);
+    ellipse(width * 0.31, -height * 0.28, 118, 118);
+    drawSceneCloud(-width * 0.3 + drift, -height * 0.25, 1.2, 210);
+    drawSceneCloud(width * 0.12 + drift * 0.6, -height * 0.1, 0.86, 180);
+    drawRollingGround(theme.ground, 185);
+  } else if (key === "sunset") {
+    fill(255, 210, 125, 225);
+    ellipse(width * 0.25, height * 0.08, 154, 154);
+    fill(77, 60, 102, 245);
+    ellipse(-width * 0.18, height * 0.34, width * 1.25, height * 0.46);
+    fill(55, 48, 82, 250);
+    ellipse(width * 0.28, height * 0.42, width * 1.5, height * 0.5);
+    drawFlyingBirds();
+  } else if (key === "beach") {
+    fill(255, 232, 154, 245);
+    ellipse(width * 0.3, -height * 0.22, 126, 126);
+    fill(50, 169, 210, 245);
+    rect(-width, height * 0.14, width * 2, height * 0.5);
+    for (let i = 0; i < 8; i++) {
+      const waveY = height * 0.18 + i * 28;
+      stroke(198, 249, 255, 145 - i * 8);
+      strokeWeight(4);
+      noFill();
+      beginShape();
+      for (let x = -width; x <= width; x += 36) {
+        vertex(x, waveY + sin(x * 0.025 + frameCount * 0.045 + i) * 7, 3);
+      }
+      endShape();
+    }
+    noStroke();
+    fill(...theme.ground, 255);
+    rect(-width, height * 0.46, width * 2, height * 0.35);
+    drawSceneCloud(-width * 0.25 + drift, -height * 0.28, 0.9, 180);
+  } else if (key === "garden") {
+    drawSceneCloud(-width * 0.26 + drift, -height * 0.27, 0.82, 155);
+    drawRollingGround(theme.ground, 170);
+    drawGardenFlowers();
+  } else {
+    // 夜晚：月亮、遠山與會緩慢呼吸的微光。
+    fill(255, 244, 203, 238);
+    ellipse(width * 0.3, -height * 0.27, 106, 106);
+    fill(12, 17, 43, 255);
+    ellipse(width * 0.325, -height * 0.29, 92, 92);
+    fill(...theme.ground, 245);
+    ellipse(-width * 0.18, height * 0.42, width * 1.25, height * 0.5);
+    ellipse(width * 0.34, height * 0.46, width * 1.5, height * 0.52);
+    for (let i = 0; i < 18; i++) {
+      const x = ((i * 173) % max(1, width)) - width / 2;
+      const y = height * 0.18 + ((i * 47) % max(1, height * 0.3));
+      fill(255, 221, 120, 95 + 90 * sin(frameCount * 0.035 + i));
+      ellipse(x, y, 5, 5);
+    }
+  }
+}
+
+function drawSceneCloud(x, y, scaleValue, alpha) {
+  push();
+  translate(x, y, 6);
+  scale(scaleValue);
+  noStroke();
+  fill(255, 255, 255, alpha);
+  ellipse(-44, 8, 86, 48);
+  ellipse(0, -4, 104, 68);
+  ellipse(52, 10, 90, 48);
+  rect(-72, 8, 146, 34, 18);
+  pop();
+}
+
+function drawRollingGround(rgb, horizonY) {
+  noStroke();
+  fill(rgb[0] + 20, rgb[1] + 18, rgb[2] + 12, 235);
+  ellipse(-width * 0.25, horizonY + 80, width * 1.3, height * 0.48);
+  fill(...rgb, 250);
+  ellipse(width * 0.25, horizonY + 130, width * 1.55, height * 0.58);
+}
+
+function drawGardenFlowers() {
+  for (let i = 0; i < 38; i++) {
+    const x = ((i * 97) % max(1, width * 1.25)) - width * 0.625;
+    const baseY = height * 0.28 + ((i * 53) % max(1, height * 0.28));
+    const sway = sin(frameCount * 0.025 + i) * 7;
+    stroke(61, 118, 72, 210);
+    strokeWeight(2);
+    line(x, baseY + 26, x + sway, baseY);
+    noStroke();
+    const flowerCols = [[255, 145, 184], [255, 225, 105], [204, 165, 255], [255, 255, 245]];
+    const c = flowerCols[i % flowerCols.length];
+    fill(...c, 225);
+    for (let p = 0; p < 5; p++) {
+      const a = p * TWO_PI / 5;
+      ellipse(x + sway + cos(a) * 7, baseY + sin(a) * 7, 10, 10);
+    }
+    fill(255, 198, 71, 240);
+    ellipse(x + sway, baseY, 7, 7);
+  }
+}
+
+function drawFlyingBirds() {
+  stroke(70, 54, 82, 150);
+  strokeWeight(3);
+  noFill();
+  for (let i = 0; i < 7; i++) {
+    const x = -width * 0.28 + i * 58 + sin(frameCount * 0.01 + i) * 10;
+    const y = -height * 0.16 + (i % 3) * 32;
+    arc(x - 9, y, 18, 12, PI, TWO_PI);
+    arc(x + 9, y, 18, 12, PI, TWO_PI);
+  }
+  noStroke();
 }
 
 // ==================================================
@@ -1189,33 +1718,66 @@ class Lantern3D {
 // CanvasButton
 // ==================================================
 class CanvasButton {
-  constructor(x, y, w, h, label, type = "tap") {
+  constructor(x, y, w, h, label, type = "tap", variant = "primary") {
     this.x = x; this.y = y; this.w = w; this.h = h;
     this.label = label;
     this.type = type;
+    this.variant = variant;
+    this.phase = random(TWO_PI);
   }
   hit(px, py) { return px >= this.x && px <= this.x + this.w && py >= this.y && py <= this.y + this.h; }
   draw(g, isHot) {
-    const r = 28;
-    g.noStroke();
-    g.fill(0, 0, 0, 80);
-    roundedRect(g, this.x + 2, this.y + 6, this.w, this.h, r);
+    const r = this.h <= 60 ? 20 : 28;
+    const floatY = this.variant === "primary" ? sin(frameCount * 0.045 + this.phase) * 2.5 : 0;
+    const pulse = 0.5 + 0.5 * sin(frameCount * 0.07 + this.phase);
+    const y = this.y + floatY;
+    g.push();
 
-    g.fill(isHot ? 255 : 255, isHot ? 205 : 215, isHot ? 70 : 90, isHot ? 255 : 240);
-    roundedRect(g, this.x, this.y, this.w, this.h, r);
+    // 柔光外框與立體陰影。
+    g.noStroke();
+    g.fill(0, 0, 0, 95);
+    roundedRect(g, this.x + 4, y + 9, this.w, this.h, r);
+
+    if (this.variant === "secondary") {
+      g.fill(isHot ? 89 : 37, isHot ? 76 : 39, isHot ? 126 : 72, 235);
+    } else if (this.variant === "choice") {
+      g.fill(isHot ? 255 : 49, isHot ? 209 : 47, isHot ? 91 : 82, 245);
+    } else {
+      g.fill(255, isHot ? 135 : 111, isHot ? 176 : 157, 250);
+    }
+    roundedRect(g, this.x, y, this.w, this.h, r);
+
+    // 上半層高光讓按鈕像糖果／扭蛋機面板。
+    g.fill(255, 255, 255, this.variant === "secondary" ? 20 : 54 + 24 * pulse);
+    roundedRect(g, this.x + 4, y + 4, this.w - 8, this.h * 0.48, max(10, r - 4));
 
     g.noFill();
-    g.stroke(255, 255, 255, 120);
-    g.strokeWeight(2);
-    roundedRect(g, this.x, this.y, this.w, this.h, r);
+    g.stroke(255, 242, 198, isHot ? 235 : 115 + 55 * pulse);
+    g.strokeWeight(isHot ? 4 : 2);
+    roundedRect(g, this.x, y, this.w, this.h, r);
+    if (isHot) {
+      g.stroke(255, 205, 113, 70 + 60 * pulse);
+      g.strokeWeight(8);
+      roundedRect(g, this.x - 4, y - 4, this.w + 8, this.h + 8, r + 4);
+    }
 
     g.noStroke();
-    g.fill(35, 20, 40, 220);
+    g.fill(this.variant === "secondary" ? 255 : 52, this.variant === "secondary" ? 248 : 28, this.variant === "secondary" ? 255 : 57, 240);
     g.textAlign(CENTER, CENTER);
 
     const ts = this.h >= 200 ? 64 : (this.h >= 120 ? 50 : (this.h <= 60 ? 24 : 40));
     g.textSize(ts);
-    g.text(this.label, this.x + this.w / 2, this.y + this.h / 2 + 2);
+    g.textStyle(BOLD);
+    g.text(this.label, this.x + this.w / 2, y + this.h / 2 + 2);
+    g.textStyle(NORMAL);
+
+    if (this.variant === "primary" && this.h < 150) {
+      g.fill(255, 246, 205, 155 + 90 * pulse);
+      g.textSize(18);
+      g.text("✦", this.x + 24, y + this.h / 2);
+      g.text("✦", this.x + this.w - 24, y + this.h / 2);
+    }
+    g.pop();
   }
 }
 
