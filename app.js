@@ -2,19 +2,26 @@
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby8mJZ1G2s4XTW0xiTznLSxSBp7n1jXhQnU9QoMmvzhUzW7Hol-3eryjZgvIMPZslikMQ/exec";
 const SCENES = [
-  { key:"garden", title:"晨光花園", icon:"✿", image:"assets/scene-garden.jpg", poem:"讓剛萌芽的念頭，在今天被溫柔看見。" },
-  { key:"day", title:"晴日遠方", icon:"☀", image:"assets/scene-day.jpg", poem:"風很清楚，路也正在你腳下慢慢展開。" },
-  { key:"sunset", title:"金色黃昏", icon:"◒", image:"assets/scene-sunset.jpg", poem:"把還沒說完的期待，交給晚霞替你收藏。" },
-  { key:"night", title:"星夜湖畔", icon:"✦", image:"assets/scene-night.jpg", poem:"在最安靜的時候，你也一直被世界聽見。" },
-  { key:"beach", title:"暮色海邊", icon:"≈", image:"assets/scene-beach.jpg", poem:"浪會帶走猶豫，也把新的勇氣送回來。" }
+  { key:"alishan", title:"阿里山小火車", icon:"阿里山", image:"assets/taiwan-alishan.jpg", poem:"蒸汽火車，載著木頭下山。" },
+  { key:"tamsui", title:"淡水河渡船", icon:"淡水", image:"assets/taiwan-tamsui.jpg", poem:"帆船慢慢過河，遠遠就是大橋。" },
+  { key:"beach", title:"淡水海水浴場", icon:"淡水", image:"assets/taiwan-beach.jpg", poem:"對面就是觀音山。" },
+  { key:"xiluo", title:"西螺大橋", icon:"西螺", image:"assets/taiwan-xiluo.jpg", poem:"大橋通車那一天，大家都來看。" },
+  { key:"village", title:"山村吊橋", icon:"山村", image:"assets/taiwan-village.jpg", poem:"牽著豬過吊橋的日子。" },
+  { key:"sunmoon", title:"日月潭", icon:"日月潭", image:"assets/taiwan-sunmoon.jpg", poem:"小舟划過湖面。" },
+  { key:"qingshui", title:"清水斷崖", icon:"東海岸", image:"assets/taiwan-qingshui.jpg", poem:"山壁直直落進海裡。" },
+  { key:"puli", title:"烏牛欄吊橋", icon:"埔里", image:"assets/taiwan-puli.jpg", poem:"車子慢慢開過吊橋。" },
+  { key:"keelungbeach", title:"基隆海水浴場", icon:"基隆", image:"assets/taiwan-keelungbeach.jpg", poem:"夏天，大家都來玩水。" },
+  { key:"keelung", title:"基隆港", icon:"基隆", image:"assets/taiwan-keelung.jpg", poem:"大船進港的地方。" },
+  { key:"chihkan", title:"赤崁樓", icon:"臺南", image:"assets/taiwan-chihkan.jpg", poem:"府城的老樓閣。" },
+  { key:"gaoping", title:"下淡水溪鐵橋", icon:"高屏", image:"assets/taiwan-gaoping.jpg", poem:"長長的鐵橋跨過大溪。" },
+  { key:"harvest", title:"農村割稻", icon:"農村", image:"assets/taiwan-harvest.jpg", poem:"稻子熟了，全家都下田。" },
+  { key:"lvchuan", title:"臺中綠川", icon:"臺中", image:"assets/taiwan-lvchuan.jpg", poem:"柳樹沿著河邊垂下來。" },
+  { key:"longshan", title:"艋舺龍山寺", icon:"艋舺", image:"assets/taiwan-longshan.jpg", poem:"來這裡拜拜，求個平安。" },
+  { key:"guanziling", title:"關子嶺溫泉", icon:"關子嶺", image:"assets/taiwan-guanziling.jpg", poem:"山裡的溫泉旅社。" }
 ];
-const FRAME_STYLES = {
-  arch:{ background:"#fff8ed", ink:"#6e4050", accent:"#e4ba75", name:"MORNING ARCH", shape:"arch" },
-  petal:{ background:"#ef756c", ink:"#fffaf0", accent:"#ffd8b3", name:"PETAL PAPER", shape:"petal" },
-  film:{ background:"#202044", ink:"#fff7e8", accent:"#d9b5ff", name:"NIGHT FILM", shape:"film" }
-};
 
-const state = { screen:"gacha", scene:SCENES[0], wish:"", frame:"arch", shots:[], collage:"", blessing:"", blessingPromise:null, stream:null, listening:false, busy:false, bgFront:"a" };
+const sceneImages = {};
+const state = { liveRun:0, screen:"gacha", scene:SCENES[0], wish:"", frame:"album", shots:[], collage:"", blessing:"", blessingPromise:null, stream:null, listening:false, busy:false, bgFront:"a" };
 const $ = (selector, root=document) => root.querySelector(selector);
 const $$ = (selector, root=document) => [...root.querySelectorAll(selector)];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -34,6 +41,8 @@ function init(){
 }
 
 function bindEvents(){
+  $("#musicBtn").addEventListener("click", toggleMusic);
+  document.addEventListener("pointerdown", autoStartMusic, {once:true});
   $("#spinBtn").addEventListener("click", spinGacha);
   $("#spinAction").addEventListener("click", spinGacha);
   $("#rerollBtn").addEventListener("click", rerollGacha);
@@ -54,8 +63,25 @@ function bindEvents(){
   window.addEventListener("pagehide", stopCamera);
 }
 
+// 瀏覽器規定要先按一下才能出聲，所以第一次點畫面就開始放
+function autoStartMusic(event){
+  if(event.target.closest("#musicBtn")) return;
+  RetroMusic.start().then(renderMusicButton);
+}
+
+function toggleMusic(){
+  RetroMusic.toggle();
+  renderMusicButton();
+}
+
+function renderMusicButton(){
+  const on = RetroMusic.isPlaying();
+  $("#musicBtn").textContent = `♪ 雨夜花：${on ? "開" : "關"}`;
+  $("#musicBtn").setAttribute("aria-pressed", String(on));
+}
+
 function preloadScenes(){
-  SCENES.forEach(scene => { const img = new Image(); img.src = scene.image; });
+  SCENES.forEach(scene => { const img = new Image(); img.src = scene.image; sceneImages[scene.key] = img; });
 }
 
 function showScreen(name){
@@ -88,24 +114,23 @@ function setScene(scene, animate=true){
 async function spinGacha(){
   if(state.busy) return;
   state.busy = true;
-  const machine = $("#machineWrap");
-  const capsule = $("#capsulePop");
-  machine.classList.add("is-spinning");
-  capsule.classList.remove("is-visible");
   const choices = SCENES.filter(scene => scene.key !== state.scene.key);
   const chosen = choices[Math.floor(Math.random()*choices.length)];
-  for(let i=0;i<5;i++){
-    await sleep(145);
-    setScene(SCENES[(SCENES.indexOf(state.scene)+1)%SCENES.length]);
+  if(window.Gacha3D){
+    // 背景隱藏時動畫會停，等太久就直接揭曉
+    await Promise.race([window.Gacha3D.spin(chosen.title),sleep(14000)]);
+  }else{
+    const machine = $("#machineWrap");
+    machine.classList.add("is-spinning");
+    await sleep(1500);
+    machine.classList.remove("is-spinning");
   }
   setScene(chosen);
-  capsule.classList.add("is-visible");
-  await sleep(780);
-  machine.classList.remove("is-spinning");
   $("#sceneIcon").textContent = chosen.icon;
   $("#sceneTitle").textContent = chosen.title;
   $("#scenePoem").textContent = chosen.poem;
   showScreen("reveal");
+  window.Gacha3D?.reset();
   state.busy = false;
 }
 
@@ -133,7 +158,7 @@ function submitTypedWish(event){
   if(submitter && submitter.value === "cancel") return;
   event.preventDefault();
   const wish = $("#wishInput").value.trim();
-  if(!wish){ showToast("先寫下一句願望吧"); return; }
+  if(!wish){ showToast("請先寫下願望"); return; }
   acceptWish(wish);
   $("#wishDialog").close();
 }
@@ -144,8 +169,9 @@ function acceptWish(wish){
   $("#wishPreview").hidden = false;
   $("#micBtn").hidden = true;
   $("#typeBtn").hidden = true;
-  $("#micStatus").textContent = "已經好好收下你的願望";
+  $("#micStatus").textContent = "收到了";
   state.blessingPromise = requestBlessing();
+  BgSwap.load();
 }
 
 function startSpeech(){
@@ -188,9 +214,9 @@ function finishListening(){
 
 async function requestBlessing(){
   state.blessing = "";
-  $("#blessingText").textContent = "正在替你準備一句祝福…";
-  $("#inlineBlessing").textContent = "正在寫一段只給你的祝福…";
-  $(".inline-blessing span").textContent = "AI 正在回應你的願望";
+  $("#blessingText").textContent = "正在寫祝福…";
+  $("#inlineBlessing").textContent = "請稍等…";
+  $(".inline-blessing span").textContent = "正在寫祝福";
   try{
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
@@ -198,11 +224,11 @@ async function requestBlessing(){
     clearTimeout(timer);
     const data = await response.json();
     if(!data.ok) throw new Error(data.error || "祝福暫時沒有送達");
-    state.blessing = String(data.reply || "願你慢慢靠近心裡真正想去的地方。").trim();
-    $(".inline-blessing span").textContent = "✦ AI 給你的祝福";
+    state.blessing = String(data.reply || "願您平安健康，天天歡喜。").trim();
+    $(".inline-blessing span").textContent = "給您的祝福";
   }catch(error){
-    state.blessing = "願你帶著今天的勇氣，慢慢靠近心裡真正想去的地方。";
-    $(".inline-blessing span").textContent = "✦ 先送你一句祝福";
+    state.blessing = "願您平安健康，天天歡喜。";
+    $(".inline-blessing span").textContent = "給您的祝福";
   }
   $("#blessingText").textContent = state.blessing;
   $("#inlineBlessing").textContent = state.blessing;
@@ -215,6 +241,31 @@ async function enterCamera(){
   await startCamera();
 }
 
+function sceneImage(){
+  const img = sceneImages[state.scene.key];
+  return img && img.complete && img.naturalWidth ? img : null;
+}
+
+// 相機畫面一進來就換背景，看到的就是拍出來的樣子
+function startLivePreview(){
+  const live = $("#liveCanvas");
+  const liveCtx = live.getContext("2d");
+  const stage = $("#cameraStage");
+  const run = ++state.liveRun;
+  let last = 0;
+  const loop = now => {
+    if(run !== state.liveRun || !state.stream) return;
+    requestAnimationFrame(loop);
+    if(now-last < 70) return;
+    last = now;
+    const scene = sceneImage();
+    if(!scene || !BgSwap.updateMask(video)) return;
+    BgSwap.paint(liveCtx,video,scene,live.width,live.height);
+    stage.classList.add("has-live");
+  };
+  requestAnimationFrame(loop);
+}
+
 async function startCamera(){
   stopCamera();
   $("#startShotsBtn").disabled = true;
@@ -224,8 +275,12 @@ async function startCamera(){
     state.stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:1280},height:{ideal:960}},audio:false});
     video.srcObject = state.stream;
     await video.play();
+    $("#cameraPlaceholder").innerHTML = "<span>正在換背景…</span>";
+    const swapped = await Promise.race([BgSwap.load(),sleep(15000).then(()=>false)]);
     $("#cameraPlaceholder").style.display = "none";
     $("#startShotsBtn").disabled = false;
+    if(swapped) startLivePreview();
+    else $("#cameraNote").textContent = "背景換不了，先用原本的畫面拍";
   }catch(_){
     $("#cameraPlaceholder").innerHTML = "<span>無法開啟相機<br><small>請允許相機權限後重新整理</small></span>";
     $("#startShotsBtn").disabled = true;
@@ -236,6 +291,8 @@ async function startCamera(){
 function stopCamera(){
   if(state.stream){ state.stream.getTracks().forEach(track => track.stop()); state.stream = null; }
   video.srcObject = null;
+  state.liveRun++;
+  $("#cameraStage").classList.remove("has-live");
 }
 
 function selectFrame(button){
@@ -266,7 +323,8 @@ async function shootSequence(){
     renderShotSlots();
     await sleep(850);
   }
-  $("#cameraNote").textContent = "三張完成！正在排版…";
+  $("#cameraNote").textContent = "拍好了，正在沖洗…";
+  if(state.blessingPromise) await Promise.race([state.blessingPromise,sleep(8000)]);
   state.collage = await buildCollage();
   $("#collagePreview").src = state.collage;
   $("#pickupPreview").src = state.collage;
@@ -281,6 +339,11 @@ function captureFrame(){
   const out = document.createElement("canvas");
   out.width = 1200; out.height = 900;
   const c = out.getContext("2d");
+  const scene = sceneImage();
+  if(scene && BgSwap.updateMask(video)){
+    BgSwap.paint(c,video,scene,out.width,out.height);
+    return out.toDataURL("image/jpeg",.92);
+  }
   const sourceRatio = w/h;
   const targetRatio = out.width/out.height;
   let sx=0,sy=0,sw=w,sh=h;
@@ -298,125 +361,13 @@ function renderShotSlots(){
 }
 
 async function buildCollage(){
-  canvas.width = 900; canvas.height = 1500;
-  const style = FRAME_STYLES[state.frame];
-  const [sceneImage,...images] = await Promise.all([loadImage(state.scene.image),...state.shots.map(loadImage)]);
-  drawImageCover(ctx,sceneImage,0,0,900,1500);
-  ctx.globalAlpha = state.frame === "film" ? .82 : (state.frame === "petal" ? .68 : .72);
-  ctx.fillStyle = style.background; ctx.fillRect(0,0,900,1500);
-  ctx.globalAlpha = 1;
-  drawScenePaperDetails(style);
-  ctx.fillStyle = style.ink;
-  ctx.textAlign = "left";
-  ctx.font = "800 24px 'Noto Sans TC', sans-serif";
-  ctx.fillText(`${state.scene.icon}  ${state.scene.title} · WISH PHOTO`,54,62);
-  images.forEach((img,index) => drawStyledPhoto(img,54,105+index*375,792,330,style,index));
-  ctx.fillStyle = style.ink;
-  ctx.textAlign = "left";
-  ctx.font = "700 31px 'Noto Sans TC', sans-serif";
-  ctx.fillText(style.name,54,1265);
-  ctx.textAlign = "right";
-  ctx.font = "600 27px 'Noto Sans TC', sans-serif";
-  ctx.fillText("三格願望寫真",846,1265);
-  ctx.textAlign = "left";
-  ctx.font = "600 25px 'Noto Serif TC', serif";
-  drawWrappedText(`「${state.wish}」`,54,1320,792,38,3,style.ink);
-  ctx.textAlign = "right";
-  ctx.font = "500 17px 'Noto Sans TC', sans-serif";
-  ctx.fillText(formatDate(new Date()),846,1460);
-  drawSparkle(ctx,820,58,style.accent);
+  const images = await Promise.all(state.shots.map(loadImage));
+  await renderCollage(ctx,{images,frame:state.frame,scene:state.scene,sceneImage:sceneImage(),blessingText:state.blessing});
   return canvas.toDataURL("image/jpeg",.9);
 }
 
 function loadImage(src){
   return new Promise((resolve,reject) => { const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src; });
-}
-
-function drawImageCover(context,img,x,y,w,h){
-  const ratio=Math.max(w/img.width,h/img.height); const sw=w/ratio; const sh=h/ratio;
-  context.drawImage(img,(img.width-sw)/2,(img.height-sh)/2,sw,sh,x,y,w,h);
-}
-
-function drawStyledPhoto(img,x,y,w,h,style,index){
-  ctx.save();
-  photoShapePath(ctx,x,y,w,h,style.shape,index);
-  ctx.clip();
-  drawImageCover(ctx,img,x,y,w,h);
-  ctx.restore();
-  ctx.save();
-  photoShapePath(ctx,x,y,w,h,style.shape,index);
-  ctx.strokeStyle = style.accent;
-  ctx.lineWidth = style.shape === "film" ? 8 : 5;
-  ctx.stroke();
-  if(style.shape === "film") drawFilmHoles(x,y,w,h,style.accent);
-  ctx.restore();
-}
-
-function photoShapePath(context,x,y,w,h,shape,index){
-  if(shape === "arch"){
-    const rise = h*.38;
-    context.beginPath(); context.moveTo(x,y+h); context.lineTo(x,y+rise);
-    context.bezierCurveTo(x,y-28,x+w,y-28,x+w,y+rise);
-    context.lineTo(x+w,y+h); context.closePath();
-    return;
-  }
-  if(shape === "petal"){
-    const flip = index%2 ? -1 : 1;
-    context.beginPath(); context.moveTo(x+44,y+6);
-    context.quadraticCurveTo(x+w*.5,y-18*flip,x+w-38,y+10);
-    context.quadraticCurveTo(x+w+18,y+h*.18,x+w-5,y+h*.36);
-    context.quadraticCurveTo(x+w+20,y+h*.58,x+w-8,y+h*.78);
-    context.quadraticCurveTo(x+w-8,y+h+15,x+w-48,y+h-5);
-    context.quadraticCurveTo(x+w*.5,y+h+18*flip,x+38,y+h-8);
-    context.quadraticCurveTo(x-18,y+h*.82,x+5,y+h*.62);
-    context.quadraticCurveTo(x-20,y+h*.38,x+6,y+h*.2);
-    context.quadraticCurveTo(x+4,y-10,x+44,y+6); context.closePath();
-    return;
-  }
-  roundedRect(context,x,y,w,h,14);
-}
-
-function drawFilmHoles(x,y,w,h,color){
-  ctx.fillStyle = color;
-  for(let px=x+34;px<x+w-20;px+=58){
-    roundedRect(ctx,px,y+12,28,10,3); ctx.fill();
-    roundedRect(ctx,px,y+h-22,28,10,3); ctx.fill();
-  }
-}
-
-function drawScenePaperDetails(style){
-  ctx.save();
-  ctx.globalAlpha = .16;
-  ctx.fillStyle = style.accent;
-  for(let i=0;i<11;i++){
-    const radius = 14+(i%4)*9;
-    ctx.beginPath(); ctx.arc((i*173)%940,(i*257)%1510,radius,0,Math.PI*2); ctx.fill();
-  }
-  ctx.translate(865,470); ctx.rotate(Math.PI/2);
-  ctx.font = "800 72px 'Noto Serif TC', serif";
-  ctx.textAlign = "center";
-  ctx.fillText(state.scene.title,0,0);
-  ctx.restore();
-}
-
-function roundedRect(c,x,y,w,h,r){
-  c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
-}
-
-function drawWrappedText(text,x,y,maxWidth,lineHeight,maxLines,color){
-  const chars=[...text]; let line=""; const lines=[];
-  chars.forEach(char => { const test=line+char; if(ctx.measureText(test).width>maxWidth && line){lines.push(line);line=char;} else line=test; });
-  if(line) lines.push(line);
-  ctx.fillStyle=color;
-  lines.slice(0,maxLines).forEach((value,index)=>ctx.fillText(value,x,y+index*lineHeight));
-}
-
-function drawSparkle(c,x,y,color){
-  c.fillStyle=color; c.beginPath(); c.moveTo(x,y-20); c.lineTo(x+6,y-6); c.lineTo(x+20,y); c.lineTo(x+6,y+6); c.lineTo(x,y+20); c.lineTo(x-6,y+6); c.lineTo(x-20,y); c.lineTo(x-6,y-6); c.closePath(); c.fill();
-}
-
-function formatDate(date){
-  return new Intl.DateTimeFormat("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
 }
 
 async function retake(){
@@ -449,7 +400,7 @@ function renderQR(text,mount){
 function downloadCollage(){
   if(!state.collage) return;
   const link=document.createElement("a");
-  link.download=`wish-strip-${Date.now()}.jpg`; link.href=state.collage; link.click();
+  link.download=`願望相片-${Date.now()}.jpg`; link.href=state.collage; link.click();
 }
 
 function showFinale(){
@@ -468,12 +419,12 @@ function showFinale(){
 
 function resetExperience(){
   stopCamera();
-  Object.assign(state,{screen:"gacha",scene:SCENES[0],wish:"",frame:"arch",shots:[],collage:"",blessing:"",blessingPromise:null,stream:null,listening:false,busy:false});
+  Object.assign(state,{screen:"gacha",scene:SCENES[0],wish:"",frame:"album",shots:[],collage:"",blessing:"",blessingPromise:null,stream:null,listening:false,busy:false});
   $("#wishPreview").hidden=true; $("#wishText").textContent=""; $("#wishInput").value="";
-  $("#micBtn").hidden=false; $("#typeBtn").hidden=false; $("#micStatus").textContent="輕觸開始說話";
-  $("#shotCount").textContent="0"; $("#blessingText").textContent="正在替你準備一句祝福…";
+  $("#micBtn").hidden=false; $("#typeBtn").hidden=false; $("#micStatus").textContent="按一下，開始說";
+  $("#shotCount").textContent="0"; $("#blessingText").textContent="正在寫祝福…";
   $$(".frame-chip").forEach((chip,index)=>chip.classList.toggle("is-active",index===0));
-  $("#cameraStage").dataset.frame="arch";
+  $("#cameraStage").dataset.frame="album";
   renderShotSlots(); setScene(SCENES[0]); showScreen("gacha");
 }
 
