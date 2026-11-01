@@ -176,6 +176,7 @@ function draw() {
   updateGacha();
   background(5, 8, 20);
   drawSky3D();
+  drawAmbientDepth3D();
 
   if (state === "release_fx") {
     // ✅ 5秒期間仍顯示愛心（包含文字）
@@ -575,14 +576,130 @@ function getVisibleButtons() {
 }
 
 // ==================================================
+// 全域 3D 舞台：景深、光環、漂浮粒子
+// ==================================================
+function drawAmbientDepth3D() {
+  const key = gachaSpinning ? scenePreviewKey : selectedSceneKey;
+  const theme = SCENE_THEMES[key] || SCENE_THEMES.night;
+  const pointerX = typeof mouseX === "number" ? map(mouseX, 0, max(1, width), -1, 1) : 0;
+  const pointerY = typeof mouseY === "number" ? map(mouseY, 0, max(1, height), -1, 1) : 0;
+
+  push();
+  rotateX(radians(72 + pointerY * 2.2));
+  rotateZ(frameCount * 0.0018 + pointerX * 0.035);
+  translate(pointerX * 24, height * 0.42, -540);
+  noFill();
+  for (let i = 0; i < 4; i++) {
+    stroke(...theme.accent, 42 - i * 7);
+    strokeWeight(2.2 - i * 0.28);
+    torus(min(width, height) * (0.38 + i * 0.12), 2.4, 72, 8);
+    translate(0, 0, -18);
+  }
+  pop();
+
+  push();
+  noStroke();
+  for (let i = 0; i < 30; i++) {
+    const orbit = i * 2.399 + frameCount * (0.0025 + (i % 4) * 0.0008);
+    const radius = min(width, height) * (0.22 + (i % 7) * 0.075);
+    const z = -260 - (i % 6) * 105;
+    const x = cos(orbit) * radius + pointerX * (10 + (i % 4) * 4);
+    const y = sin(orbit * 1.31) * radius * 0.58 + pointerY * 10;
+    const pulse = 0.55 + 0.45 * sin(frameCount * 0.035 + i * 1.7);
+    push();
+    translate(x, y, z);
+    fill(...theme.accent, 35 + 70 * pulse);
+    sphere(2.2 + (i % 3) * 1.4, 8, 6);
+    pop();
+  }
+  pop();
+}
+
+function drawHudAtmosphere3D() {
+  const theme = SCENE_THEMES[gachaSpinning ? scenePreviewKey : selectedSceneKey] || SCENE_THEMES.night;
+  const pulse = 0.5 + 0.5 * sin(frameCount * 0.022);
+  hud.noStroke();
+  hud.fill(4, 7, 24, 68);
+  hud.ellipse(VW * 0.5, VH * 0.2 + 10, VW * 0.92, VH * 0.4);
+  hud.fill(...theme.accent, 12 + 12 * pulse);
+  hud.ellipse(VW * 0.5, VH * 0.19, VW * 0.72, VH * 0.28);
+
+  for (let i = 0; i < 18; i++) {
+    const a = i * 2.08 + frameCount * 0.006;
+    const rx = 430 + (i % 5) * 42;
+    const ry = 185 + (i % 4) * 24;
+    const x = VW / 2 + cos(a) * rx;
+    const y = VH / 2 + sin(a * 1.17) * ry;
+    const s = 2 + (i % 3) * 1.8;
+    hud.fill(...theme.accent, 38 + 50 * sin(frameCount * 0.04 + i));
+    hud.ellipse(x, y, s, s);
+  }
+}
+
+function drawHudVignette3D() {
+  const ctx = hud.drawingContext;
+  ctx.save();
+  const vignette = ctx.createRadialGradient(VW / 2, VH * 0.46, VH * 0.12, VW / 2, VH * 0.5, VW * 0.86);
+  vignette.addColorStop(0, "rgba(4,7,24,0)");
+  vignette.addColorStop(0.7, "rgba(4,7,24,0.04)");
+  vignette.addColorStop(1, "rgba(2,4,16,0.38)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, VW, VH);
+  ctx.restore();
+}
+
+function drawPanel3D(g, x, y, w, h, r, accent, depth = 14, face = [11, 16, 42, 225]) {
+  const glow = accent || [255, 213, 116];
+  g.push();
+  g.noStroke();
+  g.fill(0, 0, 0, 72);
+  roundedRect(g, x + 10, y + depth + 15, w, h, r + 3);
+
+  for (let d = depth; d >= 1; d -= 2) {
+    const t = d / max(1, depth);
+    g.fill(3 + glow[0] * 0.055, 6 + glow[1] * 0.04, 18 + glow[2] * 0.035, 218);
+    roundedRect(g, x, y + d, w, h, r);
+    if (t < 0.28) break;
+  }
+
+  g.fill(...face);
+  roundedRect(g, x, y, w, h, r);
+
+  const ctx = g.drawingContext;
+  ctx.save();
+  const sheen = ctx.createLinearGradient(x, y, x, y + h);
+  sheen.addColorStop(0, "rgba(255,255,255,0.17)");
+  sheen.addColorStop(0.34, "rgba(255,255,255,0.035)");
+  sheen.addColorStop(1, "rgba(0,0,0,0.17)");
+  ctx.fillStyle = sheen;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x + 1, y + 1, w - 2, h - 2, max(1, r - 1));
+  else ctx.rect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fill();
+  ctx.restore();
+
+  g.noFill();
+  g.stroke(...glow, 155);
+  g.strokeWeight(2.4);
+  roundedRect(g, x, y, w, h, r);
+  g.stroke(255, 255, 255, 85);
+  g.strokeWeight(1.4);
+  roundedRect(g, x + 5, y + 5, w - 10, h * 0.43, max(6, r - 5));
+  g.noStroke();
+  g.fill(255, 255, 255, 195);
+  g.ellipse(x + 22, y + 18, 5, 5);
+  g.fill(...glow, 120);
+  g.ellipse(x + w - 22, y + h - 18, 7, 7);
+  g.pop();
+}
+
+// ==================================================
 // HUD（大字 + 行距 + 不重疊）
 // ==================================================
 function drawHUD() {
   hud.clear();
 
-  hud.noStroke();
-  hud.fill(255, 255, 255, 10);
-  hud.ellipse(VW * 0.5, VH * 0.18, VW * 0.85, VH * 0.35);
+  drawHudAtmosphere3D();
 
   const TITLE_SIZE = 48;
   const SUB_BASE_SIZE = 40;
@@ -593,13 +710,21 @@ function drawHUD() {
 
   hud.textAlign(CENTER, TOP);
 
-  hud.fill(255);
+  const activeTheme = SCENE_THEMES[gachaSpinning ? scenePreviewKey : selectedSceneKey] || SCENE_THEMES.night;
   hud.textSize(TITLE_SIZE);
   hud.textLeading(TITLE_SIZE * 1.35);
+  hud.textStyle(BOLD);
 
   const titleY = TOP_PAD;
   const title = getTitleText();
+  hud.fill(7, 9, 25, 185);
+  hud.text(title, VW / 2 + 4, titleY + 7);
+  hud.stroke(...activeTheme.accent, 125);
+  hud.strokeWeight(3);
+  hud.fill(255);
   hud.text(title, VW / 2, titleY);
+  hud.noStroke();
+  hud.textStyle(NORMAL);
 
   const titleBlockH = TITLE_SIZE * 1.35;
   const subY = titleY + titleBlockH + GAP;
@@ -619,7 +744,9 @@ function drawHUD() {
     subSize -= 2;
   }
 
-  hud.fill(235);
+  hud.fill(7, 9, 25, 150);
+  hud.text(sub, VW / 2 + 3, subY + 5);
+  hud.fill(243, 246, 255);
   hud.textSize(subSize);
   hud.textLeading(subSize * 1.55);
   hud.text(sub, VW / 2, subY);
@@ -657,6 +784,8 @@ function drawHUD() {
   }
   for (const id of visible) buttons[id].draw(hud, isButtonHot(id));
 
+  drawHudVignette3D();
+
   const s = min(width / VW, height / VH);
   const ox = (width - VW * s) / 2;
   const oy = (height - VH * s) / 2;
@@ -682,11 +811,15 @@ function drawCurrentSceneBadge() {
   const scene = SCENE_THEMES[selectedSceneKey] || SCENE_THEMES.night;
   const pulse = 0.5 + 0.5 * sin(frameCount * 0.045);
   hud.noStroke();
-  hud.fill(8, 12, 31, 145);
+  hud.fill(0, 0, 0, 75);
+  roundedRect(hud, 26, 27, 196, 50, 20);
+  hud.fill(15, 18, 45, 235);
   roundedRect(hud, 22, 18, 196, 50, 20);
+  hud.fill(255, 255, 255, 30 + 20 * pulse);
+  roundedRect(hud, 27, 23, 186, 22, 15);
   hud.noFill();
   hud.stroke(...scene.accent, 130 + 80 * pulse);
-  hud.strokeWeight(2);
+  hud.strokeWeight(2.5);
   roundedRect(hud, 22, 18, 196, 50, 20);
   hud.noStroke();
   hud.fill(...scene.accent, 245);
@@ -760,9 +893,9 @@ function updateGacha() {
 function burstGachaParticles() {
   const palette = SCENE_THEMES[selectedSceneKey];
   gachaParticles = [];
-  for (let i = 0; i < 64; i++) {
+  for (let i = 0; i < 112; i++) {
     const a = random(-PI, 0);
-    const speed = random(2.5, 8.5);
+    const speed = random(3.2, 11.5);
     gachaParticles.push({
       x: VW / 2,
       y: 395,
@@ -772,6 +905,7 @@ function burstGachaParticles() {
       size: random(5, 13),
       col: random([palette.accent, [255, 255, 255], [255, 191, 223]]),
       rot: random(TWO_PI),
+      streak: random(1.6, 4.5),
     });
   }
 }
@@ -784,11 +918,39 @@ function drawGachaScreen(yTop) {
   const sceneKey = gachaSpinning ? scenePreviewKey : selectedSceneKey;
   const scene = SCENE_THEMES[sceneKey];
 
+  // 整台機器浮在有景深的展示台上。
   hud.noStroke();
-  hud.fill(8, 12, 31, 130);
-  roundedRect(hud, 240, y - 16, 800, 390, 42);
-  hud.fill(255, 255, 255, 18);
-  roundedRect(hud, 260, y, 760, 350, 34);
+  hud.fill(0, 0, 0, 78);
+  hud.ellipse(cx, y + 372, 670, 72);
+  hud.fill(...scene.accent, 22);
+  hud.ellipse(cx, y + 360, 590, 54);
+  drawPanel3D(hud, 240, y - 16, 800, 356, 42, scene.accent, 18, [8, 12, 36, 188]);
+
+  // 立體背板與環形跑馬燈。
+  hud.noFill();
+  for (let ring = 0; ring < 3; ring++) {
+    hud.stroke(...scene.accent, 55 - ring * 12);
+    hud.strokeWeight(3 - ring * 0.55);
+    hud.ellipse(cx, globeY + 6, globeR * 2 + 55 + ring * 24, globeR * 2 + 55 + ring * 24);
+  }
+  hud.noStroke();
+  for (let i = 0; i < 18; i++) {
+    const a = i * TWO_PI / 18 + frameCount * (gachaSpinning ? 0.035 : 0.006);
+    const rr = globeR + 37;
+    const lampPulse = 0.45 + 0.55 * sin(frameCount * 0.11 + i * 0.8);
+    hud.fill(...scene.accent, 90 + 150 * lampPulse);
+    hud.ellipse(cx + cos(a) * rr, globeY + sin(a) * rr, 7 + 4 * lampPulse, 7 + 4 * lampPulse);
+  }
+  if (gachaSpinning) {
+    const spinPulse = 0.5 + 0.5 * sin(frameCount * 0.25);
+    hud.noFill();
+    for (let i = 0; i < 8; i++) {
+      const start = frameCount * 0.13 + i * TWO_PI / 8;
+      hud.stroke(...scene.accent, 90 + 100 * spinPulse);
+      hud.strokeWeight(4 + (i % 3) * 2);
+      hud.arc(cx, globeY, globeR * 2 + 84 + i * 5, globeR * 2 + 84 + i * 5, start, start + 0.34 + i * 0.018);
+    }
+  }
 
   // 透明球罩內的扭蛋會持續漂動，轉動時速度加快。
   const ctx = hud.drawingContext;
@@ -796,8 +958,13 @@ function drawGachaScreen(yTop) {
   ctx.beginPath();
   ctx.arc(cx, globeY, globeR - 8, 0, Math.PI * 2);
   ctx.clip();
-  hud.fill(15, 22, 54, 220);
-  hud.ellipse(cx, globeY, globeR * 2, globeR * 2);
+  const glass = ctx.createRadialGradient(cx - 48, globeY - 58, 8, cx, globeY, globeR * 1.08);
+  glass.addColorStop(0, "rgba(255,255,255,0.48)");
+  glass.addColorStop(0.24, "rgba(96,125,220,0.24)");
+  glass.addColorStop(0.72, "rgba(18,25,67,0.88)");
+  glass.addColorStop(1, "rgba(5,9,31,0.98)");
+  ctx.fillStyle = glass;
+  ctx.fillRect(cx - globeR, globeY - globeR, globeR * 2, globeR * 2);
 
   const sceneKeys = Object.keys(SCENE_THEMES);
   for (let i = 0; i < 14; i++) {
@@ -811,6 +978,11 @@ function drawGachaScreen(yTop) {
   }
   ctx.restore();
 
+  // 厚玻璃球罩：暗側、亮邊與鏡面反光。
+  hud.noFill();
+  hud.stroke(3, 7, 25, 205);
+  hud.strokeWeight(18);
+  hud.ellipse(cx + 5, globeY + 9, globeR * 2 + 10, globeR * 2 + 10);
   hud.noFill();
   hud.stroke(255, 245, 220, 220);
   hud.strokeWeight(8);
@@ -819,13 +991,55 @@ function drawGachaScreen(yTop) {
   hud.strokeWeight(4);
   hud.arc(cx - 24, globeY - 18, globeR * 1.35, globeR * 1.35, PI + 0.2, TWO_PI - 0.25);
 
-  // 機台與會轉動的把手。
+  hud.stroke(255, 255, 255, 145);
+  hud.strokeWeight(7);
+  hud.arc(cx - 28, globeY - 27, globeR * 1.42, globeR * 1.42, PI + 0.28, TWO_PI - 0.32);
+
+  // 機台與會轉動的立體把手。
+  for (let d = 22; d >= 3; d -= 3) {
+    hud.noStroke();
+    hud.fill(88 - d, 28, 74, 245);
+    roundedRect(hud, cx - 176, globeY + 112 + d, 352, 132, 34);
+  }
+  const baseCtx = hud.drawingContext;
+  baseCtx.save();
+  const baseGrad = baseCtx.createLinearGradient(cx - 176, globeY + 112, cx + 176, globeY + 244);
+  baseGrad.addColorStop(0, "#ff9dc4");
+  baseGrad.addColorStop(0.48, "#ff6ca4");
+  baseGrad.addColorStop(1, "#bf3f84");
+  baseCtx.fillStyle = baseGrad;
+  baseCtx.beginPath();
+  if (baseCtx.roundRect) baseCtx.roundRect(cx - 176, globeY + 112, 352, 132, 34);
+  else baseCtx.rect(cx - 176, globeY + 112, 352, 132);
+  baseCtx.fill();
+  baseCtx.restore();
+
   hud.noStroke();
-  hud.fill(255, 118, 160);
-  roundedRect(hud, cx - 176, globeY + 112, 352, 132, 34);
-  hud.fill(255, 224, 105);
+  hud.fill(255, 255, 255, 62);
+  roundedRect(hud, cx - 164, globeY + 121, 328, 42, 24);
+
+  for (let d = 11; d >= 2; d -= 3) {
+    hud.fill(118, 76, 30, 225);
+    roundedRect(hud, cx - 144, globeY + 142 + d, 288, 76, 26);
+  }
+  const plateCtx = hud.drawingContext;
+  plateCtx.save();
+  const plateGrad = plateCtx.createLinearGradient(cx, globeY + 142, cx, globeY + 218);
+  plateGrad.addColorStop(0, "#fff19a");
+  plateGrad.addColorStop(0.55, "#ffd75c");
+  plateGrad.addColorStop(1, "#d89d25");
+  plateCtx.fillStyle = plateGrad;
+  plateCtx.beginPath();
+  if (plateCtx.roundRect) plateCtx.roundRect(cx - 144, globeY + 142, 288, 76, 26);
+  else plateCtx.rect(cx - 144, globeY + 142, 288, 76);
+  plateCtx.fill();
+  plateCtx.restore();
+  hud.noFill();
+  hud.stroke(255, 250, 205, 210);
+  hud.strokeWeight(3);
   roundedRect(hud, cx - 144, globeY + 142, 288, 76, 26);
   hud.fill(68, 35, 74);
+  hud.noStroke();
   hud.textAlign(CENTER, CENTER);
   hud.textStyle(BOLD);
   hud.textSize(30);
@@ -835,12 +1049,26 @@ function drawGachaScreen(yTop) {
   hud.push();
   hud.translate(cx + 205, globeY + 170);
   hud.rotate(gachaSpinning ? frameCount * 0.24 : -0.35);
+  hud.noStroke();
+  hud.fill(0, 0, 0, 105);
+  hud.ellipse(7, 9, 72, 72);
+  hud.fill(122, 72, 23, 235);
+  hud.ellipse(3, 5, 68, 68);
   hud.fill(255, 225, 115);
   hud.ellipse(0, 0, 62, 62);
+  hud.fill(255, 255, 255, 105);
+  hud.ellipse(-13, -14, 22, 16);
+  hud.fill(255, 247, 216);
+  hud.rect(-8, -4, 88, 20, 10);
+  hud.fill(143, 77, 95);
+  hud.rect(-8, 8, 88, 9, 6);
   hud.fill(255, 247, 216);
   roundedRect(hud, -8, -10, 88, 20, 10);
   hud.fill(255, 118, 160);
+  hud.ellipse(84, 5, 38, 38);
   hud.ellipse(82, 0, 34, 34);
+  hud.fill(255, 255, 255, 95);
+  hud.ellipse(75, -7, 11, 8);
   hud.pop();
 
   drawGachaParticles();
@@ -851,14 +1079,22 @@ function drawGachaCapsule(g, x, y, size, angle, scene) {
   g.translate(x, y);
   g.rotate(angle * 0.35);
   g.noStroke();
+  g.fill(0, 0, 0, 70);
+  g.ellipse(4, 7, size * 2.08, size * 2.08);
   g.fill(...scene.accent, 245);
   g.arc(0, 0, size * 2, size * 2, PI, TWO_PI, CHORD);
   g.fill(250, 249, 255, 245);
   g.arc(0, 0, size * 2, size * 2, 0, PI, CHORD);
+  g.noFill();
+  g.stroke(255, 255, 255, 185);
+  g.strokeWeight(2.2);
+  g.arc(-3, -2, size * 1.6, size * 1.6, PI + 0.15, TWO_PI - 0.35);
   g.stroke(255, 255, 255, 185);
   g.strokeWeight(3);
   g.line(-size, 0, size, 0);
   g.noStroke();
+  g.fill(255, 255, 255, 145);
+  g.ellipse(-size * 0.34, -size * 0.42, size * 0.34, size * 0.22);
   g.fill(55, 37, 72);
   g.textAlign(CENTER, CENTER);
   g.textSize(size * 0.8);
@@ -875,8 +1111,13 @@ function drawGachaParticles() {
     p.rot += 0.08;
     hud.push();
     hud.translate(p.x, p.y);
+    hud.stroke(...p.col, constrain(p.life * 1.8, 0, 180));
+    hud.strokeWeight(max(1, p.size * 0.2));
+    hud.line(0, 0, -p.vx * p.streak, -p.vy * p.streak);
     hud.rotate(p.rot);
     hud.noStroke();
+    hud.fill(...p.col, constrain(p.life * 0.8, 0, 80));
+    hud.ellipse(0, 0, p.size * 2.8, p.size * 2.8);
     hud.fill(...p.col, constrain(p.life * 2.2, 0, 230));
     hud.rect(-p.size / 2, -p.size / 2, p.size, p.size, 3);
     hud.pop();
@@ -889,15 +1130,21 @@ function drawCameraScreen(yTop) {
   const screenH = 360;
   const x = 60;
   const y = min(yTop, VH - screenH - 160);
+  const theme = SCENE_THEMES[selectedSceneKey] || SCENE_THEMES.night;
 
-  hud.noStroke();
-  hud.fill(10, 12, 30, 200);
-  roundedRect(hud, x - 16, y - 16, screenW + 32, screenH + 32, 22);
+  drawPanel3D(hud, x - 22, y - 22, screenW + 44, screenH + 44, 28, theme.accent, 16, [8, 12, 33, 235]);
 
+  // 拍貼機螢幕的內縮金屬框。
+  for (let d = 11; d >= 2; d -= 3) {
+    hud.noFill();
+    hud.stroke(2, 5, 19, 150 + d * 6);
+    hud.strokeWeight(3);
+    roundedRect(hud, x - d / 2, y - d / 2, screenW + d, screenH + d, 14 + d / 2);
+  }
   hud.noFill();
-  hud.stroke(255, 220, 140, 120);
+  hud.stroke(255, 255, 255, 95);
   hud.strokeWeight(2);
-  roundedRect(hud, x - 16, y - 16, screenW + 32, screenH + 32, 22);
+  roundedRect(hud, x + 4, y + 4, screenW - 8, screenH - 8, 13);
 
   hud.noStroke();
   if (selfieImg) {
@@ -927,6 +1174,13 @@ function drawCameraScreen(yTop) {
     if (boothShooting && boothCountdown > 0) {
       hud.fill(8, 10, 24, 130);
       hud.ellipse(x + screenW / 2, y + screenH / 2, 170, 170);
+      hud.noFill();
+      for (let ring = 0; ring < 4; ring++) {
+        hud.stroke(...theme.accent, 120 - ring * 22);
+        hud.strokeWeight(3 - ring * 0.45);
+        const rr = 180 + ring * 22 + sin(frameCount * 0.12) * 8;
+        hud.ellipse(x + screenW / 2, y + screenH / 2, rr, rr);
+      }
       hud.noFill();
       hud.stroke(255, 225, 120, 240);
       hud.strokeWeight(7);
@@ -959,13 +1213,8 @@ function drawFramePicker(y) {
   const x = 812;
   const w = 408;
   const h = 360;
-  hud.noStroke();
-  hud.fill(16, 19, 42, 220);
-  roundedRect(hud, x, y - 16, w, h + 32, 22);
-  hud.noFill();
-  hud.stroke(255, 220, 140, 110);
-  hud.strokeWeight(2);
-  roundedRect(hud, x, y - 16, w, h + 32, 22);
+  const theme = SCENE_THEMES[selectedSceneKey] || SCENE_THEMES.night;
+  drawPanel3D(hud, x, y - 16, w, h + 32, 26, theme.accent, 14, [14, 18, 46, 238]);
   hud.noStroke();
   hud.fill(255);
   hud.textAlign(CENTER, TOP);
@@ -983,8 +1232,14 @@ function drawFrameSample(cx, cy, style) {
   const w = 216;
   const h = 112;
   hud.noStroke();
+  hud.fill(0, 0, 0, 90);
+  roundedRect(hud, cx + 7, cy + 10, w, h, 16);
+  hud.fill(70, 45, 90, 170);
+  roundedRect(hud, cx + 3, cy + 5, w, h, 16);
   hud.fill(...palette.bg);
   roundedRect(hud, cx, cy, w, h, 16);
+  hud.fill(255, 255, 255, 42);
+  roundedRect(hud, cx + 5, cy + 5, w - 10, h * 0.42, 12);
   hud.fill(...palette.paper);
   roundedRect(hud, cx + 14, cy + 14, 56, 70, 8);
   roundedRect(hud, cx + 80, cy + 14, 56, 70, 8);
@@ -1109,13 +1364,22 @@ function composePhotoBoothCard(shots, style) {
   card.background(...palette.bg);
 
   card.noStroke();
+  card.fill(24, 15, 40, 70);
+  roundedRect(card, 36, 36, 842, 848, 40);
+  card.fill(...palette.accent);
+  roundedRect(card, 18, 16, 864, 864, 42);
   card.fill(...palette.paper);
   roundedRect(card, 24, 22, 852, 856, 38);
+  card.fill(255, 255, 255, 72);
+  roundedRect(card, 34, 32, 832, 210, 30);
 
   card.fill(...palette.ink);
   card.textAlign(CENTER, CENTER);
   card.textStyle(BOLD);
   card.textSize(42);
+  card.fill(0, 0, 0, 45);
+  card.text("WISH BOOTH", 453, 70);
+  card.fill(...palette.ink);
   card.text("WISH BOOTH", 450, 66);
   card.textStyle(NORMAL);
   card.textSize(22);
@@ -1138,8 +1402,10 @@ function composePhotoBoothCard(shots, style) {
 
 function drawBoothPhoto(g, img, x, y, w, h, palette) {
   g.noStroke();
-  g.fill(25, 20, 40, 45);
-  roundedRect(g, x + 5, y + 7, w, h, 20);
+  g.fill(25, 20, 40, 82);
+  roundedRect(g, x + 11, y + 15, w, h, 22);
+  g.fill(80, 52, 80, 75);
+  roundedRect(g, x + 5, y + 8, w, h, 22);
   g.fill(...palette.accent);
   roundedRect(g, x - 7, y - 7, w + 14, h + 14, 22);
   g.fill(255);
@@ -1158,6 +1424,14 @@ function drawBoothPhoto(g, img, x, y, w, h, palette) {
   g.image(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
   g.drawingContext.restore();
   g.pop();
+
+  g.noFill();
+  g.stroke(255, 255, 255, 150);
+  g.strokeWeight(3);
+  roundedRect(g, x + 2, y + 2, w - 4, h - 4, 14);
+  g.noStroke();
+  g.fill(255, 255, 255, 48);
+  roundedRect(g, x + 8, y + 8, w - 16, h * 0.24, 10);
 }
 
 function drawBoothDecorations(g, style, palette) {
@@ -1221,15 +1495,16 @@ function drawFinalPreview(yTop) {
   const cardH = 260;
   const x = VW / 2 - cardW / 2;
   const y = min(yTop, VH - cardH - 160);
+  const theme = SCENE_THEMES[selectedSceneKey] || SCENE_THEMES.night;
 
   hud.noStroke();
-  hud.fill(15, 18, 40, 170);
-  roundedRect(hud, x, y, cardW, cardH, 18);
+  hud.fill(...theme.accent, 24);
+  hud.ellipse(VW / 2, y + cardH + 38, cardW * 0.88, 68);
+  drawPanel3D(hud, x, y, cardW, cardH, 28, theme.accent, 18, [12, 16, 44, 226]);
 
-  hud.noFill();
-  hud.stroke(255, 220, 140, 90);
-  hud.strokeWeight(2);
-  roundedRect(hud, x, y, cardW, cardH, 18);
+  hud.noStroke();
+  hud.fill(...theme.accent, 205);
+  roundedRect(hud, x + 22, y + 24, 12, cardH - 48, 7);
 
   hud.noStroke();
   hud.fill(255);
@@ -1252,18 +1527,23 @@ function drawSavedPickupScreen(yTop) {
   const theme = SCENE_THEMES[selectedSceneKey] || SCENE_THEMES.night;
 
   hud.noStroke();
-  hud.fill(9, 13, 34, 205);
-  roundedRect(hud, x, y, w, h, 34);
-  hud.noFill();
-  hud.stroke(...theme.accent, 185);
-  hud.strokeWeight(3);
-  roundedRect(hud, x, y, w, h, 34);
+  hud.fill(...theme.accent, 22);
+  hud.ellipse(x + w / 2, y + h + 42, w * 0.9, 76);
+  drawPanel3D(hud, x, y, w, h, 36, theme.accent, 18, [8, 13, 37, 238]);
 
   if (selfieImg) {
     hud.noStroke();
-    hud.fill(255, 255, 255, 25);
+    hud.fill(0, 0, 0, 95);
+    roundedRect(hud, x + 36, y + 42, 322, 322, 26);
+    hud.fill(...theme.accent, 210);
     roundedRect(hud, x + 28, y + 28, 322, 322, 26);
+    hud.fill(255, 255, 255, 60);
+    roundedRect(hud, x + 34, y + 34, 310, 150, 22);
     hud.image(selfieImg, x + 39, y + 39, 300, 300);
+    hud.noFill();
+    hud.stroke(255, 255, 255, 145);
+    hud.strokeWeight(3);
+    roundedRect(hud, x + 38, y + 38, 302, 302, 20);
   }
 
   hud.noStroke();
@@ -1292,8 +1572,15 @@ function drawSavedPickupScreen(yTop) {
 
   const qrX = x + 802;
   const qrY = y + 54;
+  hud.noStroke();
+  hud.fill(0, 0, 0, 95);
+  roundedRect(hud, qrX + 8, qrY + 12, 252, 252, 22);
+  hud.fill(...theme.accent, 215);
+  roundedRect(hud, qrX - 5, qrY - 5, 262, 262, 26);
   hud.fill(255);
   roundedRect(hud, qrX, qrY, 252, 252, 22);
+  hud.fill(255, 255, 255, 75);
+  roundedRect(hud, qrX + 8, qrY + 8, 236, 92, 16);
 
   if (pickupState === "ready" && pickupQrImg) {
     hud.image(pickupQrImg, qrX + 16, qrY + 16, 220, 220);
@@ -1729,47 +2016,87 @@ class CanvasButton {
   hit(px, py) { return px >= this.x && px <= this.x + this.w && py >= this.y && py <= this.y + this.h; }
   draw(g, isHot) {
     const r = this.h <= 60 ? 20 : 28;
-    const floatY = this.variant === "primary" ? sin(frameCount * 0.045 + this.phase) * 2.5 : 0;
+    const floatY = this.variant === "primary" ? sin(frameCount * 0.045 + this.phase) * 3.5 : 0;
     const pulse = 0.5 + 0.5 * sin(frameCount * 0.07 + this.phase);
-    const y = this.y + floatY;
+    const pressed = pointerDown && pointerDownId && this.hit(pointerToHUD(_lastPointerX, _lastPointerY).x, pointerToHUD(_lastPointerX, _lastPointerY).y);
+    const depth = this.h <= 60 ? 8 : 14;
+    const pressShift = pressed ? depth * 0.58 : 0;
+    const y = this.y + floatY + pressShift;
+    const visibleDepth = max(3, depth - pressShift);
     g.push();
 
-    // 柔光外框與立體陰影。
+    // 落地陰影與多層擠出厚度。
     g.noStroke();
-    g.fill(0, 0, 0, 95);
-    roundedRect(g, this.x + 4, y + 9, this.w, this.h, r);
+    g.fill(0, 0, 0, 105);
+    roundedRect(g, this.x + 8, y + visibleDepth + 11, this.w, this.h, r + 2);
 
+    let top = [255, 140, 184];
+    let bottom = [190, 58, 126];
+    let side = [91, 27, 81];
+    let ink = [47, 25, 58];
     if (this.variant === "secondary") {
-      g.fill(isHot ? 89 : 37, isHot ? 76 : 39, isHot ? 126 : 72, 235);
+      top = isHot ? [118, 104, 171] : [72, 66, 117];
+      bottom = [32, 31, 72];
+      side = [17, 17, 48];
+      ink = [255, 248, 255];
     } else if (this.variant === "choice") {
-      g.fill(isHot ? 255 : 49, isHot ? 209 : 47, isHot ? 91 : 82, 245);
-    } else {
-      g.fill(255, isHot ? 135 : 111, isHot ? 176 : 157, 250);
+      top = isHot ? [255, 226, 115] : [90, 82, 133];
+      bottom = isHot ? [213, 145, 48] : [38, 39, 82];
+      side = isHot ? [116, 70, 26] : [21, 22, 58];
+      ink = isHot ? [61, 34, 42] : [249, 245, 255];
     }
-    roundedRect(g, this.x, y, this.w, this.h, r);
 
-    // 上半層高光讓按鈕像糖果／扭蛋機面板。
-    g.fill(255, 255, 255, this.variant === "secondary" ? 20 : 54 + 24 * pulse);
-    roundedRect(g, this.x + 4, y + 4, this.w - 8, this.h * 0.48, max(10, r - 4));
+    for (let d = visibleDepth; d >= 1; d -= 2) {
+      g.fill(...side, 248);
+      roundedRect(g, this.x, y + d, this.w, this.h, r);
+    }
+
+    const ctx = g.drawingContext;
+    ctx.save();
+    const faceGrad = ctx.createLinearGradient(this.x, y, this.x, y + this.h);
+    faceGrad.addColorStop(0, `rgba(${top[0]},${top[1]},${top[2]},1)`);
+    faceGrad.addColorStop(0.52, `rgba(${round((top[0] + bottom[0]) / 2)},${round((top[1] + bottom[1]) / 2)},${round((top[2] + bottom[2]) / 2)},1)`);
+    faceGrad.addColorStop(1, `rgba(${bottom[0]},${bottom[1]},${bottom[2]},1)`);
+    ctx.fillStyle = faceGrad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(this.x, y, this.w, this.h, r);
+    else ctx.rect(this.x, y, this.w, this.h);
+    ctx.fill();
+    ctx.restore();
+
+    // 鏡面高光與底部反射線。
+    g.noStroke();
+    g.fill(255, 255, 255, this.variant === "secondary" ? 25 : 64 + 28 * pulse);
+    roundedRect(g, this.x + 5, y + 5, this.w - 10, this.h * 0.44, max(10, r - 5));
+    g.fill(255, 255, 255, 34);
+    roundedRect(g, this.x + 16, y + 9, this.w * 0.38, max(5, this.h * 0.08), 8);
+    g.fill(20, 8, 35, 48);
+    roundedRect(g, this.x + 8, y + this.h - 13, this.w - 16, 7, 5);
 
     g.noFill();
-    g.stroke(255, 242, 198, isHot ? 235 : 115 + 55 * pulse);
-    g.strokeWeight(isHot ? 4 : 2);
+    g.stroke(255, 244, 204, isHot ? 245 : 132 + 55 * pulse);
+    g.strokeWeight(isHot ? 4.5 : 2.4);
     roundedRect(g, this.x, y, this.w, this.h, r);
     if (isHot) {
-      g.stroke(255, 205, 113, 70 + 60 * pulse);
-      g.strokeWeight(8);
-      roundedRect(g, this.x - 4, y - 4, this.w + 8, this.h + 8, r + 4);
+      g.stroke(255, 214, 126, 70 + 80 * pulse);
+      g.strokeWeight(10);
+      roundedRect(g, this.x - 5, y - 5, this.w + 10, this.h + 10, r + 5);
+      g.stroke(255, 255, 255, 55 + 65 * pulse);
+      g.strokeWeight(17);
+      roundedRect(g, this.x - 9, y - 9, this.w + 18, this.h + 18, r + 9);
     }
 
     g.noStroke();
-    g.fill(this.variant === "secondary" ? 255 : 52, this.variant === "secondary" ? 248 : 28, this.variant === "secondary" ? 255 : 57, 240);
+    g.fill(0, 0, 0, 95);
     g.textAlign(CENTER, CENTER);
 
     const ts = this.h >= 200 ? 64 : (this.h >= 120 ? 50 : (this.h <= 60 ? 24 : 40));
     g.textSize(ts);
     g.textStyle(BOLD);
-    g.text(this.label, this.x + this.w / 2, y + this.h / 2 + 2);
+    g.text(this.label, this.x + this.w / 2 + 2, y + this.h / 2 + 6);
+    g.fill(...ink, 250);
+    g.textAlign(CENTER, CENTER);
+    g.text(this.label, this.x + this.w / 2, y + this.h / 2 + 1);
     g.textStyle(NORMAL);
 
     if (this.variant === "primary" && this.h < 150) {
