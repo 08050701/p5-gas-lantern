@@ -281,3 +281,7 @@ h2{line-height:1.5}
 #albumDialog .action-row{margin-top:18px}
 .album-nav button{white-space:nowrap}
 @media(max-width:820px){.album-nav{gap:10px}.album-nav button{padding:0 16px;font-size:21px}}
+
+.browser-tip{position:fixed;left:12px;right:12px;bottom:12px;z-index:50;display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--paper);color:var(--ink);border:3px double var(--red);border-radius:6px;font-size:20px;line-height:1.7;box-shadow:0 8px 22px rgba(0,0,0,.5)}
+.browser-tip button{flex:none;width:44px;height:44px;font-size:26px;background:none;border:0;color:var(--ink);cursor:pointer}
+.camera-note .text-link{display:block;font-size:21px;color:var(--paper)}

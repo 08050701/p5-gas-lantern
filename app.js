@@ -43,7 +43,18 @@ const video = $("#cameraVideo");
 const canvas = $("#captureCanvas");
 const ctx = canvas.getContext("2d");
 
+// LINE、Facebook 內建瀏覽器常常不能用相機和麥克風
+function guardInAppBrowser(){
+  const ua = navigator.userAgent;
+  if(/\bLine\//i.test(ua) && !location.search.includes("openExternalBrowser")){
+    location.replace(`${location.pathname}${location.search ? `${location.search}&` : "?"}openExternalBrowser=1`);
+    return;
+  }
+  if(/\bLine\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger/i.test(ua)) $("#browserTip").hidden = false;
+}
+
 function init(){
+  guardInAppBrowser();
   setScene(state.scene, false);
   bindEvents();
   FlipAlbum.bind();
@@ -74,7 +85,8 @@ function bindEvents(){
   $("#downloadBtn").addEventListener("click", downloadCollage);
   $("#finishBtn").addEventListener("click", showFinale);
   $("#againBtn").addEventListener("click", resetExperience);
-  $("#homeBtn").addEventListener("click", resetExperience);
+  $("#homeBtn").addEventListener("click", () => { if(!state.busy) resetExperience(); });
+  $("#browserTipClose").addEventListener("click", () => { $("#browserTip").hidden = true; });
   $$(".frame-chip").forEach(button => button.addEventListener("click", () => selectFrame(button)));
   $("#wishInput").addEventListener("input", updateCharCount);
   $("#wishForm").addEventListener("submit", submitTypedWish);
@@ -293,6 +305,19 @@ function finishListening(){
   $(".mic-icon").textContent = "說話";
 }
 
+// AI 沒有回應時，至少依願望內容給一句貼近的話
+function localBlessing(wish){
+  const rules = [
+    [/健康|身體|病|腳|手術|平安|長壽/,["願您身體勇健，每天都吃得下、睡得好。","願病痛遠離，日子平平安安。"]],
+    [/孫|子女|兒|女兒|小孩|考試|讀書|學業/,["願孩子們順順利利，也常常回來看您。","願晚輩們都有好前途，您也放心歡喜。"]],
+    [/錢|財|發|生意|工作|賺/,["願您財源廣進，做什麼都順順利利。","願生意興隆，日子越過越好。"]],
+    [/家|團圓|回來|老伴|牽手/,["願全家人常常團圓，一起吃飯、一起笑。","願您和家人互相照顧，幸福長長久久。"]]
+  ];
+  const hit = rules.find(([pattern]) => pattern.test(wish));
+  const pool = hit ? hit[1] : ["願您平安健康，天天歡喜。","願您心想事成，日子甜甜蜜蜜。"];
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
 async function requestBlessing(){
   state.blessing = "";
   $("#blessingText").textContent = "正在寫祝福…";
@@ -305,10 +330,10 @@ async function requestBlessing(){
     clearTimeout(timer);
     const data = await response.json();
     if(!data.ok) throw new Error(data.error || "祝福暫時沒有送達");
-    state.blessing = String(data.reply || "願您平安健康，天天歡喜。").trim();
+    state.blessing = String(data.reply || "").trim() || localBlessing(state.wish);
     $(".inline-blessing span").textContent = "給您的祝福";
   }catch(error){
-    state.blessing = "願您平安健康，天天歡喜。";
+    state.blessing = localBlessing(state.wish);
     $(".inline-blessing span").textContent = "給您的祝福";
   }
   $("#blessingText").textContent = state.blessing;
@@ -380,7 +405,11 @@ async function startCamera(){
   }catch(_){
     $("#cameraPlaceholder").innerHTML = "<span>無法開啟相機<br><small>請允許相機權限後重新整理</small></span>";
     $("#startShotsBtn").disabled = true;
-    $("#cameraNote").textContent = "需要相機權限才能真正拍照";
+    $("#cameraNote").textContent = "相機開不起來也沒關係";
+    const skip = document.createElement("button");
+    skip.className = "text-link"; skip.type = "button"; skip.textContent = "不拍照，直接放天燈";
+    skip.addEventListener("click", () => showFinale());
+    $("#cameraNote").appendChild(skip);
   }
 }
 
@@ -486,8 +515,7 @@ async function preparePickup(){
     if(!data.ok || !data.claimUrl) throw new Error(data.error || "沒有取得領取網址");
     renderQR(String(data.claimUrl),mount);
   }catch(error){
-    mount.innerHTML='<div class="qr-loading">QR Code 暫時沒有送達<br>仍可按下方按鈕直接下載</div>';
-    showToast(error.message || "照片上傳失敗");
+    mount.innerHTML='<div class="qr-loading">這裡暫時掃不了<br>請按下方「直接下載」存到手機</div>';
   }
   state.busy=false;
 }
@@ -497,16 +525,26 @@ function renderQR(text,mount){
   new QRCode(mount,{text,width:202,height:202,colorDark:"#281c31",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
 }
 
-function downloadCollage(){
+// 手機用分享面板最穩，選「儲存影像」就進相簿；電腦才走下載
+async function downloadCollage(){
   if(!state.collage) return;
+  const name=`轉來坐-${Date.now()}.jpg`;
+  try{
+    const blob=await (await fetch(state.collage)).blob();
+    const file=new File([blob],name,{type:"image/jpeg"});
+    if(/Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.canShare?.({files:[file]})){ await navigator.share({files:[file]}); return; }
+  }catch(error){
+    if(error.name==="AbortError") return;
+  }
   const link=document.createElement("a");
-  link.download=`轉來坐-${Date.now()}.jpg`; link.href=state.collage; link.click();
+  link.download=name; link.href=state.collage; link.click();
 }
 
 async function showFinale(){
   showScreen("finale");
   $("#finaleIntro").hidden=false; $("#lightBtn").hidden=false; $("#finaleEnd").hidden=true;
   $("#finaleWish").textContent=`「${state.wish}」`;
+  checkAlbum();
   const photo=state.shots[0] ? await loadImage(state.shots[0]).catch(()=>null) : null;
   await Promise.allSettled([document.fonts.load(`700 80px 'LXGW WenKai TC'`,state.wish+state.scene.title+"福平安健康團圓壽好運如意發財")]);
   state.lantern3d=!!window.LanternSky?.open({wish:lanternWish(),photo,title:state.scene.title});
@@ -540,6 +578,16 @@ function releaseFallbackLanterns(){
 }
 
 // ── 大家的相冊 ─────────────────────────────
+// 後端還沒開通、或沒有拍照時，不出現相冊按鈕
+async function checkAlbum(){
+  $("#albumBtn").hidden=true;
+  if(!state.collage) return;
+  try{
+    const data=await albumCall({action:"albumList"});
+    $("#albumBtn").hidden=!Array.isArray(data.pages);
+  }catch(_){}
+}
+
 function askAlbum(){
   $("#albumDialog").showModal();
 }
