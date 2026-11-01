@@ -289,9 +289,17 @@ h2{line-height:1.5}
 /* 3D 相冊：桌上的一本書 */
 .screen.album{animation:none!important}
 .book-stage{display:none;position:fixed;left:0;top:0;width:100vw;height:100dvh;z-index:0}
-.has-book .book-stage{display:block}
+.has-book .book-stage{display:block;pointer-events:auto}
+.has-book .album-nav span{white-space:nowrap;min-width:0}
+.book-wish{user-select:none;-webkit-user-select:none}
 .has-book .album-book{display:none}
 .screen.album.has-book.is-active{justify-content:flex-end;pointer-events:none}
+.book-wish{display:none}
+.has-book .book-wish{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:calc(100vw - 32px);min-height:3.1em;position:relative;z-index:2;color:#fbf3df;font:700 clamp(17px,2.4vh,21px)/1.5 "LXGW WenKai TC","Noto Serif TC",serif;text-align:center;text-shadow:0 1px 5px rgba(0,0,0,.9);transition:opacity .25s}
+.book-wish.is-single{grid-template-columns:1fr}
+.book-wish.is-single p:empty{display:none}
+.book-wish.is-turning{opacity:0}
+.book-wish p{margin:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .has-book .album-note,.has-book .album-nav,.has-book .text-link{position:relative;z-index:2;pointer-events:auto}
 .book3d{display:block;width:100%!important;height:100%!important;cursor:grab;touch-action:pan-y}
 .book3d:active{cursor:grabbing}

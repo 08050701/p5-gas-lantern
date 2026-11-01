@@ -1,24 +1,14 @@
 // 大家的相冊：一本放在桌上的 3D 書。紙會沿著弧線彎起來，手指拖到哪、紙就跟到哪。
 import * as THREE from "three";
 
-const W = 3, H = 4.2;
+const W = 3, H = 5; // 跟拍貼一樣 3:5，照片剛好滿版不裁切
 const COLS = 48, ROWS = 12;
-const PAGE_PX = [768,1075];
+const PAGE_PX = [768,1280];
 const HAND = "'LXGW WenKai TC','Noto Serif TC',serif";
 const SERIF = "'Noto Serif TC',serif";
+const BASE = .015; // 封面板的上緣
 const clamp = (v,a=0,b=1) => Math.min(b,Math.max(a,v));
-const hump = s => .13*Math.exp(-s/.42); // 靠書脊的紙會微微拱起
-
-function wrapLines(c,text,width,maxLines){
-  const lines=[]; let line="";
-  for(const ch of text){
-    const next=line+ch;
-    if(c.measureText(next).width>width && line && !"」，。！？、…".includes(ch)){ lines.push(line); line=ch; } else line=next;
-  }
-  if(line) lines.push(line);
-  if(lines.length>maxLines){ lines.length=maxLines; lines[maxLines-1]=lines[maxLines-1].slice(0,-1)+"…"; }
-  return lines;
-}
+const hump = s => .17*(1-Math.exp(-s/.13))*Math.exp(-s/.75); // 書溝低、旁邊微微拱起，像真的攤開的書
 
 function paperBase(c,w,h){
   const g=c.createLinearGradient(0,0,0,h);
@@ -54,21 +44,12 @@ function drawEnd(c,w,h,note){
 
 function drawEntry(c,w,h,page,img){
   paperBase(c,w,h);
-  const maxW=w-120, maxH=h-290;
   if(img){
-    const r=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight), iw=img.naturalWidth*r, ih=img.naturalHeight*r;
-    const x=(w-iw)/2, y=44;
-    c.save(); c.shadowColor="rgba(60,35,10,.5)"; c.shadowBlur=20; c.shadowOffsetY=7;
-    c.fillStyle="#fbf5e6"; c.fillRect(x-10,y-10,iw+20,ih+20); c.restore();
-    c.drawImage(img,x,y,iw,ih);
+    const r=Math.max(w/img.naturalWidth,h/img.naturalHeight), iw=img.naturalWidth*r, ih=img.naturalHeight*r;
+    c.drawImage(img,(w-iw)/2,(h-ih)/2,iw,ih);
   }else{
-    c.fillStyle="#6b5238"; c.font=`600 34px ${SERIF}`; c.textAlign="center"; c.textBaseline="middle"; c.fillText("翻開中…",w/2,maxH/2);
+    c.fillStyle="#6b5238"; c.font=`600 34px ${SERIF}`; c.textAlign="center"; c.textBaseline="middle"; c.fillText("翻開中…",w/2,h/2);
   }
-  c.fillStyle="#3a2a1c"; c.textAlign="center"; c.textBaseline="alphabetic"; c.font=`700 36px ${HAND}`;
-  const lines=wrapLines(c,`「${page.wish}」`,w-110,3);
-  const top=h-212;
-  lines.forEach((line,i)=>c.fillText(line,w/2,top+i*62));
-  c.fillStyle="#6b5238"; c.font=`600 25px ${SERIF}`; c.fillText(`${page.scene}　${page.date}`,w/2,h-30);
 }
 
 class Book {
@@ -81,7 +62,7 @@ class Book {
     this.renderer.domElement.className="book3d";
     mount.appendChild(this.renderer.domElement);
     this.scene=new THREE.Scene();
-    this.camera=new THREE.PerspectiveCamera(30,1,.1,80);
+    this.camera=new THREE.PerspectiveCamera(30,1,3,40);
     this.camX=0; this.focus=1;
     const hemi=new THREE.HemisphereLight(0xfff4e0,0x8a7458,1.75); this.scene.add(hemi);
     const sun=new THREE.DirectionalLight(0xffeccb,1.5);
@@ -183,28 +164,35 @@ class Book {
     this.setPage(this.pageL,this.blockL,this.coverL,left);
     this.setPage(this.pageR,this.blockR,this.coverR,right);
     const total=Math.max(this.pages.length,2);
-    const stack=(n)=>.03+.16*clamp(n/total);
-    this.blockL.scale.y=stack(Math.max(0,left)); this.blockR.scale.y=stack(total-right);
+    this.blockL.scale.y=this.stack(Math.max(0,left)); this.blockR.scale.y=this.stack(total-right);
     this.coverL.position.y=this.coverR.position.y=-.01;
-    const base=.015; // 紙疊放在封面板上
-    this.blockL.position.y=base+this.blockL.scale.y/2; this.blockR.position.y=base+this.blockR.scale.y/2;
-    this.pageL.position.y=base+this.blockL.scale.y+.002; this.pageR.position.y=base+this.blockR.scale.y+.002;
+    this.blockL.position.y=BASE+this.blockL.scale.y/2; this.blockR.position.y=BASE+this.blockR.scale.y/2;
+    this.pageL.position.y=this.topOf(Math.max(0,left)); this.pageR.position.y=this.topOf(total-right);
     [index=>this.texture(index)].forEach(fn=>{ fn(this.at+2); fn(this.at+3); fn(this.at-1); });
   }
+
+  stack(n){ return .03+.16*clamp(n/Math.max(this.pages.length,2)); }
+  topOf(n){ return BASE+this.stack(n)+.008; } // 紙疊表面的高度
+
+  canNext(){ return this.at+2<this.pages.length&&this.pages[this.at+2].kind!=="blank"; }
 
   startTurn(dir,grabbed=false){
     if(this.turn) return false;
     const a=this.at;
-    if(dir>0 ? a+2>=this.pages.length : a<0) return false;
+    if(dir>0 ? !this.canNext() : a<0) return false;
     const frontIndex=dir>0?a+1:a-1, backIndex=dir>0?a+2:a;
     const back=this.texture(backIndex).clone();
     back.wrapS=THREE.RepeatWrapping; back.repeat.x=-1; back.offset.x=1; back.needsUpdate=true;
     this.front.map=this.texture(frontIndex); this.back.map=back;
     this.front.needsUpdate=this.back.needsUpdate=true;
     this.turn={dir,p:dir>0?0:1,v:0,target:grabbed?null:(dir>0?1:0),stiff:frontIndex===0,backClone:back};
+    // 整張紙走在左右兩疊之上，起落再貼回紙面，才不會穿進另一疊
+    const n=this.pages.length, from=dir>0?this.topOf(n-a-1):this.topOf(Math.max(0,a));
+    const to=dir>0?this.topOf(Math.max(0,a+2)):this.topOf(n-a+1);
+    this.turn.heights=[from,Math.max(from,to,this.topOf(Math.max(0,a)),this.topOf(n-a-1))+.01,to];
     if(dir>0) this.layout(a,a+3); else this.layout(a-2,a+1);
     this.leaf.visible=true;
-    this.leaf.position.y=dir>0?this.pageR.position.y:this.pageL.position.y;
+    document.getElementById("bookWish").classList.add("is-turning");
     this.bend(this.turn.p);
     window.RetroSfx?.page?.();
     return true;
@@ -214,6 +202,8 @@ class Book {
   bend(p){
     const T=this.turn, pos=this.leafGeo.attributes.position;
     const soft=T.stiff?.05:.95, ds=W/COLS, dz=H/ROWS;
+    const q=T.dir>0?p:1-p, ease=t=>{ t=clamp(t); return t*t*(3-2*t); }, [y0,y1,y2]=T.heights;
+    this.leaf.position.y=q<.5?y0+(y1-y0)*ease(q/.18):y2+(y1-y2)*ease((1-q)/.18);
     for(let r=0,i=0;r<=ROWS;r++){
       const n=r/ROWS;
       const pr=clamp(p+.1*Math.sin(Math.PI*p)*(2*n-1));
@@ -252,10 +242,23 @@ class Book {
   }
 
   report(){
-    const last=this.pages.length-1;
-    document.getElementById("albumCount").textContent=`${(this.at+1)/2+1} / ${Math.floor(this.pages.length/2)+1}`;
-    document.getElementById("albumPrev").disabled=this.at<0;
-    document.getElementById("albumNext").disabled=this.at+2>last&&(!this.narrow||this.focus>0);
+    const pages=this.pages, last=pages.length-1, left=this.at, right=this.at+1;
+    const total=pages.filter(page=>page.kind!=="cover"&&page.kind!=="blank").length;
+    const real=i=>i>0&&i<=total;
+    let label;
+    if(left<0) label="封面";
+    else if(this.narrow) label=`第 ${this.focus<0||!real(right)?left:right} / ${total} 頁`;
+    else label=real(right)?`第 ${left}–${right} 頁，共 ${total} 頁`:`第 ${left} 頁，共 ${total} 頁`;
+    document.getElementById("albumCount").textContent=label;
+    document.getElementById("albumPrev").disabled=left<0;
+    document.getElementById("albumNext").disabled=!this.canNext()&&(!this.narrow||this.focus>0||!real(right));
+    const box=document.getElementById("bookWish"), [one,two]=box.children;
+    const wish=i=>pages[i]?.wish?`「${pages[i].wish}」`:"";
+    box.classList.remove("is-turning");
+    box.style.width=`${2*(this.toScreen(W)-this.toScreen(0))}px`;
+    box.classList.toggle("is-single",this.narrow);
+    one.textContent=this.narrow?wish(this.focus<0?left:right):wish(left);
+    two.textContent=this.narrow?"":wish(right);
   }
 
   bindPointer(){
@@ -301,7 +304,7 @@ class Book {
     this.narrow=w/h<1;
     const need=this.narrow?W+.5:W*2+.9;
     const visW=6.3*this.camera.aspect;
-    this.fit=Math.max(1,need/visW);
+    this.fit=Math.max(1,need/visW,(H+.6)/(6.3*Math.max(.4,1-270/h))); // 下方要留願望和按鈕
     this.camera.updateProjectionMatrix();
     if(this.pages) this.report();
   }
@@ -343,7 +346,7 @@ class Book {
     this.camX+=(goal-this.camX)*.09;
     const d=this.fit||1;
     this.camera.position.set(this.camX,10.4*d,5.4*d);
-    this.camera.lookAt(this.camX,0,.42*d);
+    this.camera.lookAt(this.camX,0,.48*d);
     this.renderer.render(this.scene,this.camera);
   }
 }
