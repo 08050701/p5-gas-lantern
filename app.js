@@ -46,14 +46,21 @@ const ctx = canvas.getContext("2d");
 function init(){
   setScene(state.scene, false);
   bindEvents();
+  FlipAlbum.bind();
+  renderGachaAction();
+  window.addEventListener("load",renderGachaAction);
   preloadScenes();
 }
 
 function bindEvents(){
   $("#musicBtn").addEventListener("click", toggleMusic);
   document.addEventListener("pointerdown", autoStartMusic, {once:true});
-  $("#spinBtn").addEventListener("click", spinGacha);
-  $("#spinAction").addEventListener("click", spinGacha);
+  $("#spinBtn").addEventListener("click", gachaStep);
+  $("#spinAction").addEventListener("click", gachaStep);
+  $("#albumBtn").addEventListener("click", askAlbum);
+  $("#albumYes").addEventListener("click", () => enterAlbum(true));
+  $("#albumNo").addEventListener("click", () => enterAlbum(false));
+  $("#albumAgainBtn").addEventListener("click", resetExperience);
   $("#rerollBtn").addEventListener("click", rerollGacha);
   $("#wishBtn").addEventListener("click", () => showScreen("wish"));
   $("#typeBtn").addEventListener("click", openWishDialog);
@@ -98,7 +105,7 @@ function preloadScenes(){
 function showScreen(name){
   state.screen = name;
   screens.forEach(screen => screen.classList.toggle("is-active", screen.dataset.screen === name));
-  const step = ({gacha:0,reveal:0,wish:1,camera:2,review:3,pickup:3,finale:3})[name] ?? 0;
+  const step = ({gacha:0,reveal:0,wish:1,camera:2,review:3,pickup:3,finale:3,album:3})[name] ?? 0;
   progressDots.forEach((dot,index) => dot.classList.toggle("is-active", index === step));
   if(name !== "camera") stopCamera();
   if(name !== "finale") window.LanternSky?.close();
@@ -121,6 +128,24 @@ function setScene(scene, animate=true){
   incoming.classList.toggle("is-zoomed");
   outgoing.style.opacity = "0";
   state.bgFront = state.bgFront === "a" ? "b" : "a";
+}
+
+// 第一下投幣、第二下轉把手；按機台或按鈕都一樣
+async function gachaStep(){
+  if(state.busy) return;
+  if(window.Gacha3D && !window.Gacha3D.coined){
+    state.busy = true;
+    await window.Gacha3D.insertCoin();
+    state.busy = false;
+    renderGachaAction();
+    return;
+  }
+  spinGacha();
+}
+
+function renderGachaAction(){
+  const coined = window.Gacha3D?.coined;
+  $("#spinAction span").textContent = window.Gacha3D ? (coined ? "轉把手" : "按投幣孔，投壹圓") : "投幣，轉一下";
 }
 
 async function spinGacha(){
@@ -149,16 +174,15 @@ async function spinGacha(){
   showScreen("reveal");
   $(".hero").classList.remove("is-spinning");
   window.Gacha3D?.reset();
+  renderGachaAction();
   await sleep(80);
   wipe.classList.remove("is-on");
   state.busy = false;
 }
 
-async function rerollGacha(){
+function rerollGacha(){
   if(state.busy) return;
   showScreen("gacha");
-  await sleep(420);
-  spinGacha();
 }
 
 function openWishDialog(){
@@ -513,6 +537,55 @@ function releaseFallbackLanterns(){
     lantern.style.transform=`scale(${.5+Math.random()*.8})`;
     sky.appendChild(lantern);
   }
+}
+
+// ── 大家的相冊 ─────────────────────────────
+function askAlbum(){
+  $("#albumDialog").showModal();
+}
+
+// 相冊用小一點的圖，翻起來才快
+function albumImage(){
+  const out=document.createElement("canvas"); out.width=600; out.height=1000;
+  out.getContext("2d").drawImage(canvas,0,0,600,1000);
+  return out.toDataURL("image/jpeg",.72);
+}
+
+async function albumCall(body){
+  const response=await fetch(GAS_URL,{method:"POST",body:JSON.stringify(body)});
+  return response.json();
+}
+
+async function enterAlbum(share){
+  $("#albumDialog").close();
+  showScreen("album");
+  $("#albumNote").textContent="正在翻開相冊…";
+  const today=new Date();
+  const mine={wish:state.wish,scene:state.scene.title,date:rocDate(today),src:state.collage};
+  const list=[{kind:"cover"}];
+  if(share) list.push(mine);
+  FlipAlbum.open([...list,{kind:"end"}],null);
+  let note="";
+  try{
+    if(share){
+      const saved=await albumCall({action:"albumAdd",imageData:albumImage(),wish:state.wish,scene:state.scene.title});
+      if(saved.id) mine.id=saved.id;
+      else note=saved.error ? `這次沒放進去：${saved.error}` : "相冊還沒開通，這一頁只有您看得到";
+    }
+    const data=await albumCall({action:"albumList"});
+    if(!Array.isArray(data.pages)) throw new Error("相冊還沒開通");
+    const others=data.pages.filter(page=>page.id!==mine.id).map(page=>({id:page.id,wish:page.wish,scene:page.scene,date:rocDate(new Date(page.time))}));
+    list.push(...others);
+    if(!others.length && !note) note="您是第一位，下一位就會看到您";
+  }catch(_){
+    note=note||"相冊還沒開通，暫時看不到其他人";
+  }
+  $("#albumNote").textContent=note;
+  FlipAlbum.open([...list,{kind:"end"}],async id=>(await albumCall({action:"albumPage",id})).imageData||"");
+}
+
+function rocDate(date){
+  return `民國${date.getFullYear()-1911}年${date.getMonth()+1}月${date.getDate()}日`;
 }
 
 function resetExperience(){

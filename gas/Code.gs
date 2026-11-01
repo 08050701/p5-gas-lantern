@@ -7,6 +7,10 @@ const PHOTO_FOLDER_NAME = "願望拍貼機-QR照片";
 const PHOTO_KEY_PREFIX = "WISH_PHOTO_";
 const PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_ACTIVE_PHOTOS = 300;
+// 相冊只收本人按「放進去」的拍貼；照片留 ALBUM_KEEP_DAYS 天，最多 MAX_ALBUM_PAGES 頁。
+const ALBUM_FOLDER_NAME = "願望拍貼機-大家的相冊";
+const ALBUM_KEEP_DAYS = 30;
+const MAX_ALBUM_PAGES = 200;
 
 function doGet(e) {
   const token = String((e && e.parameter && e.parameter.photo) || "").trim();
@@ -24,6 +28,9 @@ function doPost(e) {
 
   try {
     if (body.action === "savePhoto") return jsonOut_(savePhoto_(body));
+    if (body.action === "albumAdd") return jsonOut_(albumAdd_(body));
+    if (body.action === "albumList") return jsonOut_(albumList_());
+    if (body.action === "albumPage") return jsonOut_(albumPage_(body));
     const wish = String(body.wish || "").trim();
     return jsonOut_({ ok: true, reply: getReply_(wish) });
   } catch (err) {
@@ -60,6 +67,81 @@ function savePhoto_(body) {
   ensurePhotoCleanupTrigger_();
   const claimUrl = `${ScriptApp.getService().getUrl()}?photo=${encodeURIComponent(token)}`;
   return { ok: true, claimUrl: claimUrl, token: token, expiresAt: new Date(expiresAt).toISOString() };
+}
+
+function getAlbumFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const storedId = props.getProperty("ALBUM_FOLDER_ID");
+  if (storedId) {
+    try { return DriveApp.getFolderById(storedId); } catch (err) {}
+  }
+  const folder = DriveApp.createFolder(ALBUM_FOLDER_NAME);
+  props.setProperty("ALBUM_FOLDER_ID", folder.getId());
+  return folder;
+}
+
+function albumFiles_() {
+  const list = [];
+  const files = getAlbumFolder_().getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    list.push({ file: file, time: file.getDateCreated().getTime() });
+  }
+  return list.sort(function(a, b) { return b.time - a.time; });
+}
+
+function albumAdd_(body) {
+  const imageData = String(body.imageData || "");
+  const match = imageData.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error("照片格式不支援");
+  if (imageData.length > 1500 * 1024) throw new Error("照片檔案太大");
+  if (albumFiles_().length >= MAX_ALBUM_PAGES) throw new Error("相冊已經滿了");
+
+  const blob = Utilities.newBlob(Utilities.base64Decode(match[1]), "image/jpeg", `album-${Utilities.getUuid()}.jpg`);
+  const file = getAlbumFolder_().createFile(blob);
+  file.setDescription(JSON.stringify({
+    wish: String(body.wish || "").trim().slice(0, 300),
+    scene: String(body.scene || "").trim().slice(0, 30)
+  }));
+  CacheService.getScriptCache().remove("albumList");
+  ensurePhotoCleanupTrigger_();
+  return { ok: true, id: file.getId() };
+}
+
+function albumList_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get("albumList");
+  if (cached) return JSON.parse(cached);
+  const pages = albumFiles_().map(function(item) {
+    let meta = {};
+    try { meta = JSON.parse(item.file.getDescription() || "{}"); } catch (err) {}
+    return { id: item.file.getId(), wish: meta.wish || "", scene: meta.scene || "", time: item.time };
+  });
+  const result = { ok: true, pages: pages };
+  const text = JSON.stringify(result);
+  if (text.length < 90000) cache.put("albumList", text, 60);
+  return result;
+}
+
+function albumPage_(body) {
+  const id = String(body.id || "");
+  if (!/^[\w-]{20,80}$/.test(id)) throw new Error("頁碼格式錯誤");
+  const file = DriveApp.getFileById(id);
+  // 只讀相冊資料夾裡的檔案，別的 Drive 檔案一律不給
+  const albumId = getAlbumFolder_().getId();
+  const parents = file.getParents();
+  let inAlbum = false;
+  while (parents.hasNext()) { if (parents.next().getId() === albumId) inAlbum = true; }
+  if (!inAlbum) throw new Error("找不到這一頁");
+  return { ok: true, imageData: `data:image/jpeg;base64,${Utilities.base64Encode(file.getBlob().getBytes())}` };
+}
+
+function cleanupAlbum_() {
+  if (!PropertiesService.getScriptProperties().getProperty("ALBUM_FOLDER_ID")) return;
+  const limit = Date.now() - ALBUM_KEEP_DAYS * 24 * 60 * 60 * 1000;
+  albumFiles_().forEach(function(item) {
+    if (item.time < limit) item.file.setTrashed(true);
+  });
 }
 
 function renderPhotoPickupPage_(token) {
@@ -147,6 +229,7 @@ function cleanupExpiredPhotos() {
     const token = key.substring(PHOTO_KEY_PREFIX.length);
     deletePhotoRecord_(token, record.fileId);
   });
+  cleanupAlbum_();
 }
 
 // 部署管理員只需在 Apps Script 編輯器執行一次，完成 Drive 與觸發器授權。

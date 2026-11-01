@@ -29,6 +29,13 @@ function verticalText(c,text,x,centerY,gap){
   chars.forEach((ch,i)=>c.fillText(ch,x,top+i*gap));
 }
 
+// 直書放進一段高度：字多就縮小，不切字、不壓到別的東西
+function fitVertical(c,text,x,top,bottom,maxSize,family=HAND){
+  const chars=[...text], gap=Math.min(maxSize*1.08,(bottom-top)/chars.length);
+  font(c,700,Math.min(maxSize,gap*.94),family);
+  verticalText(c,text,x,(top+bottom)/2,gap);
+}
+
 function fibers(c,w,h,count,light){
   for(let i=0;i<count;i++){
     const white=Math.random()<light;
@@ -189,10 +196,10 @@ function paperNews(c){
 
 // 小字內文：用真的字直排，看起來才像報紙
 function newsText(c,text,x,y,w,h){
-  const chars=[...text.repeat(40)], size=17, rows=Math.floor(h/(size+2));
+  const chars=[...text.repeat(40)], size=17, rows=Math.floor(h/(size+4));
   c.fillStyle="rgba(40,34,26,.82)"; font(c,600,size); c.textAlign="center"; c.textBaseline="middle";
   let i=0;
-  for(let col=x+w-size/2;col>x;col-=size+7) for(let row=0;row<rows;row++) c.fillText(chars[i++],col,y+row*(size+2)+size/2);
+  for(let col=x+w-size/2;col>x;col-=size+7) for(let row=0;row<rows;row++) c.fillText(chars[i++],col,y+row*(size+4)+size/2);
 }
 
 function newsMasthead(c,date,roc,serial){
@@ -297,7 +304,7 @@ function oldPhoto(c,img,slot,kind,caption){
     if(caption){
       // 照相館常見的白字題字
       c.save(); c.fillStyle="#fff"; c.shadowColor="rgba(0,0,0,.8)"; c.shadowBlur=5;
-      font(c,700,27,HAND); c.textAlign="left"; c.textBaseline="alphabetic"; c.fillText(caption,16,h-16); c.restore();
+      font(c,700,27,HAND); c.textAlign="left"; c.textBaseline="alphabetic"; c.fillText(caption,16,h-16,w-32); c.restore();
     }
     if(kind==="album") photoCorners(c,w,h,border);
     if(kind==="postcard"||kind==="notebook"){ tape(c,w/2,-border,.03,"rgba(226,206,150,.78)"); }
@@ -336,7 +343,7 @@ function lunarText(date){
 }
 
 function trainTicket(c,x,y,angle,title,serial){
-  const w=330, h=150, dest=title.length>5?title.slice(0,5):title;
+  const w=330, h=150, dest=title;
   rotated(c,x,y,angle,()=>{
     c.save(); c.shadowColor="rgba(0,0,0,.5)"; c.shadowBlur=12; c.shadowOffsetY=5;
     c.fillStyle="#d7e3b8"; c.fillRect(-w/2,-h/2,w,h); c.restore();
@@ -386,7 +393,7 @@ function stamp(c,x,y,angle,scene,title){
       c.drawImage(scene,(scene.naturalWidth-sw)/2,(scene.naturalHeight-sh)/2,sw,sh,-pw/2,-h/2+18,pw,ph);
     }
     c.fillStyle="#b5281f"; font(c,700,21); c.textAlign="left"; c.textBaseline="middle"; c.fillText("壹圓",-w/2+18,h/2-30);
-    c.textAlign="right"; font(c,600,17); c.fillStyle="#3a2a1c"; c.fillText(title.slice(0,6),w/2-18,h/2-30);
+    c.textAlign="right"; font(c,600,17); c.fillStyle="#3a2a1c"; c.fillText(title,w/2-18,h/2-30,w-92);
   });
 }
 
@@ -414,8 +421,9 @@ function fuDiamond(c,x,y,size){
   });
 }
 
-function blessing(c,text,color,x,width,top,bottom,family=HAND){
+function blessing(c,text,color,x,width,top,bottom,family=HAND,rule=""){
   c.textAlign="left"; c.textBaseline="alphabetic";
+  const leading=1.72;
   let size=50;
   const measure=()=>{
     font(c,700,size,family);
@@ -425,16 +433,14 @@ function blessing(c,text,color,x,width,top,bottom,family=HAND){
     return lines;
   };
   let lines=measure();
-  while(size>24 && lines.length*size*1.45>bottom-top){ size-=2; lines=measure(); }
-  const start=top+(bottom-top-lines.length*size*1.45)/2+size;
+  while(size>24 && lines.length*size*leading>bottom-top){ size-=2; lines=measure(); }
+  const start=top+(bottom-top-lines.length*size*leading)/2+size*1.1;
   c.fillStyle=color;
-  lines.forEach((line,i)=>c.fillText(line,x,start+i*size*1.45));
-}
-
-function ruledLines(c,x,width,top,gap,count,color){
-  c.strokeStyle=color; c.lineWidth=1.5; c.setLineDash([3,6]);
-  for(let i=0;i<count;i++){ c.beginPath(); c.moveTo(x,top+i*gap); c.lineTo(x+width,top+i*gap); c.stroke(); }
-  c.setLineDash([]);
+  lines.forEach((line,i)=>{
+    const y=start+i*size*leading;
+    c.fillText(line,x,y);
+    if(rule){ c.strokeStyle=rule; c.lineWidth=1.5; c.setLineDash([3,6]); c.beginPath(); c.moveTo(x-4,y+size*.3); c.lineTo(x+width,y+size*.3); c.stroke(); c.setLineDash([]); }
+  });
 }
 
 // ── 組起來 ─────────────────────────────
@@ -454,7 +460,7 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
     images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"album",i===2?caption:""));
     calendar(c,752,206,.05,date);
     trainTicket(c,180,640,-1.38,scene.title,serial);
-    c.fillStyle=FRAME_STYLES.album.ink; font(c,700,50,HAND); verticalText(c,scene.title,748,1000,52);
+    c.fillStyle=FRAME_STYLES.album.ink; fitVertical(c,scene.title,748,868,1126,50);
     pogCard(c,762,1192,56,"好",.2);
     blessing(c,text,FRAME_STYLES.album.ink,86,750,1254,1466);
   }else if(frame==="postcard"){
@@ -466,15 +472,14 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
     trainTicket(c,752,1030,1.42,scene.title,serial);
     c.fillStyle=FRAME_STYLES.postcard.ink; font(c,700,28); c.textAlign="left"; c.textBaseline="middle";
     c.fillText("明信片　POST CARD",74,1262);
-    ruledLines(c,70,760,1346,56,2,"rgba(35,67,90,.55)");
-    blessing(c,text,FRAME_STYLES.postcard.ink,74,750,1290,1464);
+    blessing(c,text,FRAME_STYLES.postcard.ink,74,750,1290,1464,HAND,"rgba(35,67,90,.55)");
   }else if(frame==="floral"){
     paperFloral(c);
     images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"red",i===2?caption:""));
     calendar(c,752,226,.05,date);
     trainTicket(c,180,640,-1.38,scene.title,serial);
     clothPatch(c,664,876,172,330);
-    c.fillStyle=FRAME_STYLES.floral.ink; font(c,700,44,HAND); verticalText(c,scene.title.slice(0,6),750,1040,50);
+    c.fillStyle=FRAME_STYLES.floral.ink; fitVertical(c,scene.title,750,900,1182,44);
     clothPatch(c,52,1244,796,226);
     blessing(c,text,FRAME_STYLES.floral.ink,84,732,1262,1452);
   }else if(frame==="notebook"){
@@ -505,7 +510,7 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
     images.forEach((img,i)=>oldPhoto(c,img,LOW_SLOTS[i],"plain",i===2?caption:""));
     c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,46,HAND); verticalText(c,"勿忘影中人",738,372,50);
     verticalText(c,"友誼長存",170,738,50);
-    verticalText(c,scene.title.slice(0,6),742,1092,44);
+    fitVertical(c,scene.title,742,984,1284,46);
     c.save(); c.shadowColor="rgba(0,0,0,.5)"; c.shadowBlur=12; c.fillStyle="#f4ead2"; c.fillRect(60,1300,780,170); c.restore();
     blessing(c,text,"#26334a",84,732,1306,1464);
   }else if(frame==="theater"){
@@ -522,7 +527,7 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
     images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"red",i===2?caption:""));
     calendar(c,752,226,.05,date);
     fuDiamond(c,170,640,190);
-    c.fillStyle=FRAME_STYLES.red.ink; font(c,700,50,HAND); verticalText(c,scene.title,748,1000,52);
+    c.fillStyle=FRAME_STYLES.red.ink; fitVertical(c,scene.title,748,868,1126,50);
     pogCard(c,762,1192,56,"福",-.2);
     blessing(c,text,FRAME_STYLES.red.ink,78,744,1250,1452);
   }

@@ -221,3 +221,63 @@ dialog{color:var(--ink)}
   .pose-card ol{display:flex;flex-wrap:wrap;gap:0 12px;font-size:17px}
   .pose-head b{font-size:19px}
 }
+
+/* 行距：中文字要留呼吸的空間 */
+h1{line-height:1.5}.hero-copy h1{line-height:1.5}
+h2{line-height:1.5}
+.lede,.scene-poem,.mic-status{line-height:1.9}
+.wish-preview p,.inline-blessing p,.blessing p{line-height:1.85}
+.pose-card ol{line-height:1.75}.pose-head b{line-height:1.5}
+.finale-intro p,.finale-end p{line-height:1.85}
+.camera-placeholder{line-height:1.8}
+@media(max-width:820px),(max-aspect-ratio:1/1){.hero-copy h1{line-height:1.45}}
+
+/* 框的質感：奶金色細線、紙牌題字，手勢改成同色剪影 */
+.pose-guide svg{filter:drop-shadow(0 1px 1px rgba(60,35,10,.9)) drop-shadow(0 0 7px rgba(30,16,4,.55))}
+.pose-fill{fill:rgba(255,240,205,.09)}
+.pose-fill-line{stroke:rgba(255,240,205,.09)}
+.pose-hand{filter:brightness(0) invert(.97) sepia(.42) saturate(1.5) drop-shadow(0 0 1px #6b4a1a) drop-shadow(0 2px 5px rgba(30,16,4,.7))}
+.pose-name{background:#f3e6cc;color:#7c1a13;border:3px double #a8281f;border-radius:3px;box-shadow:0 3px 9px rgba(0,0,0,.45);padding:.05em .8em;letter-spacing:.08em;font-size:4.4cqw}
+.camera-stage{box-shadow:0 2px 0 rgba(255,240,205,.25),0 20px 46px rgba(0,0,0,.62)}
+.camera-stage::before{content:"";position:absolute;inset:0;z-index:6;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,240,205,.45),inset 0 0 46px rgba(30,16,4,.5)}
+.camera-stage[data-frame="album"]::after{background:linear-gradient(135deg,#e7d9b6 28px,#a8926a 29px,transparent 30px) top left,linear-gradient(225deg,#e7d9b6 28px,#a8926a 29px,transparent 30px) top right,linear-gradient(45deg,#e7d9b6 28px,#a8926a 29px,transparent 30px) bottom left,linear-gradient(315deg,#e7d9b6 28px,#a8926a 29px,transparent 30px) bottom right;background-size:50% 50%;background-repeat:no-repeat}
+.camera-stage[data-frame="album"]{outline:1px solid #cdbb92}
+.camera-stage[data-frame="red"]{border-color:#8f1d15;outline:2px solid #e6c26a}
+.camera-stage[data-frame="yearbook"]{outline:2px solid #d8b65e}
+
+/* 相冊 */
+.screen.album{display:none;padding:76px 16px 14px}
+.screen.album.is-active{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.album-book{--page-h:min(calc(100dvh - 232px),860px);--page-w:calc(var(--page-h)*.72);position:relative;display:grid;grid-template-columns:var(--page-w) var(--page-w);height:var(--page-h);perspective:2200px;touch-action:pan-y;filter:drop-shadow(0 18px 26px rgba(0,0,0,.6))}
+.album-book::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:44px;margin-left:-22px;background:linear-gradient(90deg,transparent,rgba(50,28,10,.34) 48%,rgba(50,28,10,.42) 50%,transparent);pointer-events:none;z-index:4}
+.album-side,.album-face{background:#f4ead2;overflow:hidden}
+.album-side{height:100%}
+.album-leaf{position:absolute;left:50%;top:0;width:50%;height:100%;transform-origin:left center;transform-style:preserve-3d;z-index:5}
+.album-face{position:absolute;inset:0;backface-visibility:hidden}
+.album-face.is-back{transform:rotateY(180deg)}
+.album-page{height:100%;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 18px 12px;color:var(--ink);background:linear-gradient(#f7eeda,#efe2c6);text-align:center}
+.album-page img{flex:1;min-height:0;max-width:100%;object-fit:contain;box-shadow:0 3px 9px rgba(50,28,10,.4)}
+.album-page p{margin:0;width:100%;font:700 clamp(18px,2.4vh,22px)/1.7 "LXGW WenKai TC","Noto Serif TC",serif;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.album-page small{font-size:16px;color:#6b5238}
+.album-page.is-blank{background:#efe2c6}
+.album-page.is-cover,.album-page.is-end{justify-content:center;gap:16px}
+.album-page.is-cover{background:#1f3450;color:#f3e0ad;box-shadow:inset 0 0 0 10px #1f3450,inset 0 0 0 13px #d8b65e}
+.album-page.is-cover b{font-size:clamp(36px,5vh,52px);letter-spacing:.12em}
+.album-page.is-cover span{font-size:26px;letter-spacing:.3em}
+.album-page.is-cover small,.album-page.is-end small{font-size:20px;color:inherit}
+.album-page.is-end b{font-size:28px}
+.album-wait{flex:1;display:grid;place-items:center;font-size:22px;color:#6b5238}
+.album-book.is-single{--page-w:min(calc(100vw - 32px),calc(var(--page-h)*.72));grid-template-columns:var(--page-w)}
+.album-book.is-single::after{display:none}
+.album-book.is-single #albumLeft{display:none}
+.album-book.is-single .album-leaf{left:0;width:100%}
+.album-note{margin:0;min-height:1.6em;font-size:20px;line-height:1.6;text-shadow:0 1px 6px #000}
+.album-nav{display:flex;align-items:center;gap:20px}
+.album-nav button{min-height:64px;padding:0 26px;font-size:23px}
+.album-nav button:disabled{opacity:.45;cursor:default}
+.album-nav span{font-size:22px;min-width:70px;text-align:center}
+.screen.album .text-link{min-height:40px;font-size:20px}
+.album-ask{font-size:23px;line-height:1.85;color:var(--ink)}
+#albumDialog .action-row{margin-top:18px}
+.album-nav button{white-space:nowrap}
+@media(max-width:820px){.album-nav{gap:10px}.album-nav button{padding:0 16px;font-size:21px}}

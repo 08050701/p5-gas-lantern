@@ -57,10 +57,11 @@ const PoseGuide = (() => {
     // 身體只畫外輪廓；手臂疊在身體前面，自己也有完整外框
     return `<svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><defs>`
       +`<mask id="poseBody"><rect width="400" height="300" fill="#fff"/><g fill="#000">${bodies}</g>${shapes(30).replace('fill="none"','fill="none" stroke="#000"')}</mask>`
+      +`<linearGradient id="poseLine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7e2"/><stop offset="1" stop-color="#e3bf73"/></linearGradient>`
       +`<mask id="poseArms"><rect width="400" height="300" fill="#fff"/>${shapes(30).replace('fill="none"','fill="none" stroke="#000"')}</mask></defs>`
       +`<g class="pose-fill">${bodies}</g><g class="pose-fill-line" stroke="currentColor">${shapes(30)}</g>`
-      +`<g mask="url(#poseBody)" fill="#fff" stroke="#fff" stroke-width="8">${bodies}</g>`
-      +`<g mask="url(#poseArms)" stroke="#fff">${shapes(38)}</g></svg>`;
+      +`<g mask="url(#poseBody)" fill="url(#poseLine)" stroke="url(#poseLine)" stroke-width="6">${bodies}</g>`
+      +`<g mask="url(#poseArms)" stroke="#f3dfae">${shapes(36)}</g></svg>`;
   }
 
   function show(mount,poseKey){

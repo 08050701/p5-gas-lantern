@@ -120,6 +120,7 @@ const RetroSfx = (() => {
     clunk(){ noise(.14,300,1.1); },
     roll(){ noise(.5,700,.4); },
     pop(){ noise(.1,1200,.8); ring(880,.5,.09); },
+    page(){ noise(.3,2400,.22,"highpass"); },
     ignite(){ noise(.25,2600,.5); noise(1.4,420,.5); }
   };
 })();

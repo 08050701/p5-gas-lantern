@@ -79,6 +79,7 @@ class Machine {
     this.bindPointer();
     new ResizeObserver(()=>this.resize()).observe(wrap);
     this.resize();
+    this.restoreCoin();
     for(let i=0;i<260;i++) this.physics(1/60); // 開場前先讓扭蛋沉到底
     this.settle = 0;
     this.renderer.setAnimationLoop(()=>this.frame());
@@ -122,8 +123,23 @@ class Machine {
     // 投幣孔
     add(new RoundedBoxGeometry(.4,.62,.06,3,.02),chrome,1.05,1.45,1.17);
     add(new THREE.BoxGeometry(.05,.34,.02),dark,1.05,1.45,1.2);
-    this.coin = add(new THREE.CylinderGeometry(.16,.16,.03,32).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({color:0xc9a24c,metalness:1,roughness:.35}),1.05,1.45,3);
-    this.coin.visible = false;
+    const gold = new THREE.MeshStandardMaterial({color:0xc9a24c,metalness:1,roughness:.35});
+    const face = textPlane(.4,.4,(c,W,H)=>{
+      c.fillStyle="#c9a24c"; c.fillRect(0,0,W,H);
+      c.strokeStyle="#7e5f1e"; c.lineWidth=7; c.beginPath(); c.arc(W/2,H/2,W*.42,0,7); c.stroke();
+      c.fillStyle="#6d5019"; c.font=`700 ${W*.56}px 'Noto Serif TC', serif`; c.textAlign="center"; c.textBaseline="middle";
+      c.translate(W/2,H/2); c.rotate(Math.PI/2); c.fillText("壹",0,4);
+    }).material;
+    face.metalness=.75;
+    this.coin = add(new THREE.CylinderGeometry(.2,.2,.04,40).rotateZ(Math.PI/2),[gold,face,face],1.8,.5,1.5);
+    this.slotRing = add(new THREE.TorusGeometry(.46,.055,10,48),new THREE.MeshBasicMaterial({color:0xffd86a,transparent:true,depthWrite:false}),1.05,1.45,1.22);
+    this.slotRing.scale.set(.62,.9,1); this.slotRing.castShadow=false;
+    this.crankRing = add(new THREE.TorusGeometry(.6,.05,10,56),this.slotRing.material,0,1.45,1.24);
+    this.crankRing.castShadow=false;
+    // 看不見的感應區：手指比零件粗，範圍放大一點
+    const hitMat = new THREE.MeshBasicMaterial({visible:false});
+    const hit = (geo,x,y,z,part) => { const o=new THREE.Mesh(geo,hitMat); o.position.set(x,y,z); o.userData.part=part; m.add(o); return o; };
+    this.hits = [hit(new THREE.BoxGeometry(.78,1.1,.3),1.05,1.45,1.25,"slot"),hit(new THREE.SphereGeometry(.5,12,10),1.8,.5,1.5,"slot"),hit(new THREE.CylinderGeometry(.66,.66,.6,24).rotateX(Math.PI/2),0,1.45,1.3,"crank")];
 
     // 轉把手
     this.crank = new THREE.Group(); this.crank.position.set(0,1.45,1.16); m.add(this.crank);
@@ -229,16 +245,41 @@ class Machine {
       if(Math.abs(dx)>6) moved=true;
       this.yawTarget = clamp(startYaw+dx*.008,-.75,.75);
     });
-    el.addEventListener("pointerup",e=>{ if(down!==null && !moved && this.hitMachine(e)) document.getElementById("spinBtn").click(); down=null; });
+    el.addEventListener("pointerup",e=>{ if(down!==null && !moved) this.pressAt(e); down=null; });
     el.addEventListener("pointercancel",()=>{ down=null; });
   }
 
-  // 畫布鋪滿整頁，只有點到機台才算
-  hitMachine(e){
+  // 要按對地方：先投幣孔、再把手。按到機台別處就讓該按的地方閃一下
+  pressAt(e){
+    if(this.timeline||this.coinFlight) return;
     const box=this.renderer.domElement.getBoundingClientRect();
     const ray=new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2((e.clientX-box.left)/box.width*2-1,1-(e.clientY-box.top)/box.height*2),this.camera);
-    return ray.intersectObject(this.rig,true).length>0;
+    const part=ray.intersectObjects(this.hits,false)[0]?.object.userData.part;
+    if(part===(this.coined?"crank":"slot")) document.getElementById("spinBtn").click();
+    else if(part||ray.intersectObject(this.rig,true).length) this.nudge=1;
+  }
+
+  insertCoin(){
+    if(this.coined) return Promise.resolve();
+    return new Promise(resolve=>{ this.coinFlight={t:0,resolve}; });
+  }
+
+  flyCoin(dt){
+    const F=this.coinFlight; F.t+=dt;
+    const k=smoother(span(F.t,0,.75)), near=span(F.t,.75,.95);
+    this.coin.position.set(THREE.MathUtils.lerp(1.8,1.05,k),THREE.MathUtils.lerp(.5,1.45,k)+Math.sin(k*Math.PI)*.35,THREE.MathUtils.lerp(1.5,1.32,k)-near*.3);
+    this.coin.rotation.y=(1-k)*Math.PI/2;
+    this.coin.scale.setScalar(1+(1-k)*.7);
+    if(F.t>=.95){
+      window.RetroSfx?.coin();
+      this.coin.visible=false; this.coined=true; this.coinFlight=null; F.resolve();
+    }
+  }
+
+  restoreCoin(){
+    this.coined=false; this.coin.visible=true;
+    this.coin.position.set(1.8,.5,1.5); this.coin.rotation.set(0,Math.PI/2,0); this.coin.scale.setScalar(1.7);
   }
 
   homePose(){
@@ -259,7 +300,7 @@ class Machine {
     return new Promise(resolve=>{
       const picked = this.caps.filter(c=>c.live).sort((a,b)=>(a.p.y+a.p.x*a.p.x*.2+a.p.z*a.p.z*.2)-(b.p.y+b.p.x*b.p.x*.2+b.p.z*b.p.z*.2))[0];
       this.note = this.makeNote(title); this.note.visible=false; this.rig.add(this.note);
-      this.timeline = {t:0,picked,resolve,stage:{},from:null};
+      this.timeline = {t:.5,picked,resolve,stage:{},from:null};
       this.yawTarget = 0;
       // 鏡頭走一條連續的曲線：轉把手時就開始慢慢靠近，中途不停、不急轉
       const home=this.homePose(), near=new THREE.Vector3(0,1.55,7.4);
@@ -269,12 +310,14 @@ class Machine {
   }
 
   makeNote(title){
-    const size = [...title].length;
+    const chars = [...title];
     const note = textPlane(.5,1.5,(c,W,H)=>{
       c.fillStyle="#f6ecd6"; c.fillRect(0,0,W,H);
       c.strokeStyle="#a8281f"; c.lineWidth=6; c.strokeRect(10,10,W-20,H-20);
-      c.fillStyle="#3a2a1c"; c.font=`700 ${size>5?62:76}px 'Noto Serif TC', serif`; c.textAlign="center"; c.textBaseline="middle";
-      [...title].forEach((ch,i)=>c.fillText(ch,W/2,H/2+(i-(size-1)/2)*(size>5?70:84)));
+      // 字多就縮小，七個字也放得下
+      const gap=Math.min(84,(H-44)/chars.length), size=Math.min(76,gap*.92);
+      c.fillStyle="#3a2a1c"; c.font=`700 ${size}px 'Noto Serif TC', serif`; c.textAlign="center"; c.textBaseline="middle";
+      chars.forEach((ch,i)=>c.fillText(ch,W/2,H/2+(i-(chars.length-1)/2)*gap));
     });
     note.material.side = THREE.DoubleSide;
     return note;
@@ -282,14 +325,9 @@ class Machine {
 
   once(key,fn){ const s=this.timeline.stage; if(!s[key]){ s[key]=true; fn(); } }
 
-  // 劇本：0 投幣 → .5 轉把手 → 2.5 掉進出口 → 3.1 滾到接球盤 → 4 拿起來 → 5.1 打開 → 6.7 結束
+  // 劇本（投幣在按下投幣孔時就做完了）：.5 轉把手 → 2.5 掉進出口 → 3.1 滾到接球盤 → 4 拿起來 → 5.1 打開 → 6.7 結束
   runTimeline(dt){
     const T=this.timeline; T.t+=dt; const t=T.t, cap=T.picked;
-    if(t<.55){
-      this.once("coin",()=>{ this.coin.visible=true; window.RetroSfx?.coin(); });
-      this.coin.position.z = THREE.MathUtils.lerp(3,1.2,ease(span(t,0,.5)));
-      this.coin.rotation.z = t*6;
-    }else this.coin.visible=false;
     if(t>=.5 && t<2.6){
       const k=span(t,.5,2.5);
       const angle=ease(k)*Math.PI*4;
@@ -340,7 +378,7 @@ class Machine {
       ud.a.position.y=0; ud.a.rotation.x=0; ud.b.position.y=0; ud.b.rotation.x=Math.PI;
       cap.p.set(0,5,0); cap.prev.copy(cap.p); cap.mesh.visible=true; cap.live=true;
       this.rig.remove(this.note); this.flash.intensity=0;
-      this.camPath=null; this.yawTarget=-.2; this.settle=2;
+      this.camPath=null; this.yawTarget=-.2; this.settle=2; this.restoreCoin();
       // 回來時畫面已換過，直接歸位，不要看到鏡頭飛回去
       this.camera.position.copy(this.homePose()); this.look.copy(this.homeLook);
     };
@@ -357,7 +395,15 @@ class Machine {
   }
 
   step(dt){
+    if(this.coinFlight) this.flyCoin(dt);
     if(this.timeline) this.runTimeline(dt);
+    // 提示下一步要按哪裡；按錯時閃快一點
+    const waiting=!this.timeline&&!this.coinFlight;
+    this.nudge=Math.max(0,(this.nudge||0)-dt*.8);
+    this.slotRing.visible=waiting&&!this.coined;
+    this.crankRing.visible=waiting&&!!this.coined;
+    this.slotRing.material.opacity=.45+.5*Math.sin(this.idle*(this.nudge?14:3.4))**2;
+    if(waiting&&!this.coined) this.coin.position.y=.5+Math.sin(this.idle*2)*.05;
     if(this.timeline || this.settle>0 || this.stir>0){
       this.physics(Math.min(dt,1/30));
       this.settle=Math.max(0,this.settle-dt);
