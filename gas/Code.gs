@@ -1,10 +1,12 @@
 // 願望拍貼機 Google Apps Script 後端
 // OPENAI / 其他服務的金鑰不要寫在這個檔案，請放在「指令碼屬性」。
 
-const API_URL = "https://eow1fla8fgzbk23.m.pipedream.net";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const PHOTO_FOLDER_NAME = "願望拍貼機-QR照片";
 const PHOTO_KEY_PREFIX = "WISH_PHOTO_";
 const PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_ACTIVE_PHOTOS = 300;
 
 function doGet(e) {
   const token = String((e && e.parameter && e.parameter.photo) || "").trim();
@@ -30,6 +32,12 @@ function doPost(e) {
 }
 
 function savePhoto_(body) {
+  const props = PropertiesService.getScriptProperties();
+  const activePhotoCount = Object.keys(props.getProperties()).filter(function(key) {
+    return key.indexOf(PHOTO_KEY_PREFIX) === 0;
+  }).length;
+  if (activePhotoCount >= MAX_ACTIVE_PHOTOS) throw new Error("目前拍貼領取量已滿，請稍後再試");
+
   const imageData = String(body.imageData || "");
   const match = imageData.match(/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/);
   if (!match) throw new Error("照片格式不支援");
@@ -45,7 +53,7 @@ function savePhoto_(body) {
   const expiresAt = Date.now() + PHOTO_TTL_MS;
 
   // 檔案維持私人；公開網頁只會透過不可猜測的 token 讀取。
-  PropertiesService.getScriptProperties().setProperty(PHOTO_KEY_PREFIX + token, JSON.stringify({
+  props.setProperty(PHOTO_KEY_PREFIX + token, JSON.stringify({
     fileId: file.getId(),
     expiresAt: expiresAt
   }));
@@ -152,26 +160,56 @@ function jsonOut_(obj) {
 }
 
 function getReply_(wish) {
+  const cleanWish = String(wish || "").trim().slice(0, 500);
+  if (!cleanWish) return "願望已經收到，願你在接下來的日子裡，也能好好照顧自己並一步一步靠近它。";
+
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = String(props.getProperty("OPENAI_API_KEY") || "").trim();
+  const model = String(props.getProperty("OPENAI_MODEL") || DEFAULT_OPENAI_MODEL).trim();
+  if (!apiKey) throw new Error("尚未設定 OPENAI_API_KEY 指令碼屬性");
+
   const payload = {
-    model: "gpt-4o-mini",
-    wish: String(wish || "").trim(),
-    persona: "溫暖的家人",
-    style: "QandA",
-    seed: Math.floor(Math.random() * 1e9),
-    instruction: "你是溫暖的家人，用中文回覆。要貼心、具體，不要制式。請用一段話，不要加表情符號。"
+    model: model,
+    store: false,
+    max_output_tokens: 180,
+    instructions: "你是溫暖、真誠的家人。請用繁體中文回覆使用者的願望，給一段貼心且具體的祝福；不要制式、不要說教、不要使用表情符號，也不要超過 100 個中文字。",
+    input: cleanWish
   };
-  const res = UrlFetchApp.fetch(API_URL, {
+  const res = UrlFetchApp.fetch(OPENAI_RESPONSES_URL, {
     method: "post",
     contentType: "application/json",
+    headers: { Authorization: "Bearer " + apiKey },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
+  const status = res.getResponseCode();
   const raw = res.getContentText();
+  let data;
   try {
-    const data = JSON.parse(raw);
-    return String(data.reply || data.text || data.content || data.message || data.output || "").trim();
+    data = JSON.parse(raw);
   } catch (err) {
-    return String(raw || "").trim();
+    throw new Error("OpenAI API 回傳了無法解析的內容（HTTP " + status + "）");
   }
+
+  if (status < 200 || status >= 300) {
+    const detail = data && data.error && data.error.message ? String(data.error.message) : "請稍後再試";
+    throw new Error("OpenAI API 錯誤（HTTP " + status + "）：" + detail.slice(0, 180));
+  }
+
+  const outputText = String(data.output_text || extractResponseText_(data.output) || "").trim();
+  if (!outputText) throw new Error("OpenAI API 沒有回傳祝福文字");
+  return outputText;
+}
+
+function extractResponseText_(output) {
+  if (!Array.isArray(output)) return "";
+  const parts = [];
+  output.forEach(function(item) {
+    if (!item || !Array.isArray(item.content)) return;
+    item.content.forEach(function(content) {
+      if (content && content.type === "output_text" && content.text) parts.push(String(content.text));
+    });
+  });
+  return parts.join("\n");
 }
 
