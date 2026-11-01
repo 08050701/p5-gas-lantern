@@ -16,6 +16,21 @@ let cameraStream = null;
 let cameraStarting = false;
 let cameraError = "";
 let selfieImg = null;
+let selfieShots = [];
+let selectedFrameStyle = "hearts";
+let boothShooting = false;
+let boothCountdown = 0;
+let boothShotNumber = 0;
+let boothFlashUntil = 0;
+let boothSession = 0;
+const BOOTH_SHOT_COUNT = 3;
+
+const FRAME_OPTIONS = {
+  frameHearts: { key: "hearts", label: "愛心粉" },
+  frameStars: { key: "stars", label: "星光金" },
+  frameDream: { key: "dream", label: "夢幻紫" },
+  frameClassic: { key: "classic", label: "經典白" },
+};
 
 // --- 語音辨識 ---
 let recognition = null;
@@ -240,7 +255,7 @@ function stopHoldRecord() {
     finalWishText = t;
     liveWishText = t;
     state = "selfie";
-    selfieImg = null;
+    prepareSelfieStep();
     return;
   }
 
@@ -252,7 +267,7 @@ function stopHoldRecord() {
       finalWishText = t2;
       liveWishText = t2;
       state = "selfie";
-      selfieImg = null;
+      prepareSelfieStep();
     } else {
       showWishInput();
     }
@@ -280,7 +295,15 @@ function submitWishInput() {
   finalWishText = t;
   liveWishText = t;
   state = "selfie";
+  prepareSelfieStep();
+}
+
+function prepareSelfieStep() {
+  cancelBoothSequence();
+  stopCamera();
   selfieImg = null;
+  selfieShots = [];
+  cameraError = "";
 }
 
 function cancelWishInput() {
@@ -301,9 +324,14 @@ function buildButtons() {
   buttons = {
     holdRecord: new CanvasButton(centerX, centerY, bigW, bigH, "按著錄音", "hold"),
 
-    takePhoto: new CanvasButton(VW / 2 - 150, bottomY, 300, 84, "拍照", "tap"),
-    photoRedo: new CanvasButton(VW / 2 - 320, bottomY, 280, 84, "重新拍攝", "tap"),
-    photoNext: new CanvasButton(VW / 2 + 40, bottomY, 280, 84, "下一步", "tap"),
+    takePhoto: new CanvasButton(VW / 2 - 180, bottomY, 360, 84, "開啟相機", "tap"),
+    photoRedo: new CanvasButton(VW / 2 - 320, bottomY, 280, 84, "重拍三張", "tap"),
+    photoNext: new CanvasButton(VW / 2 + 40, bottomY, 280, 84, "使用這組", "tap"),
+
+    frameHearts: new CanvasButton(862, 270, 150, 58, "愛心粉", "tap"),
+    frameStars: new CanvasButton(1030, 270, 150, 58, "星光金", "tap"),
+    frameDream: new CanvasButton(862, 344, 150, 58, "夢幻紫", "tap"),
+    frameClassic: new CanvasButton(1030, 344, 150, 58, "經典白", "tap"),
 
     saveLantern: new CanvasButton(VW / 2 - 190, bottomY, 380, 92, "儲存天燈", "tap"),
 
@@ -372,15 +400,24 @@ function hitTestButton(x, y) {
 
 function onButtonClick(id) {
   if (state === "selfie") {
+    if (FRAME_OPTIONS[id] && !boothShooting) {
+      selectedFrameStyle = FRAME_OPTIONS[id].key;
+      if (selfieShots.length === BOOTH_SHOT_COUNT) {
+        selfieImg = composePhotoBoothCard(selfieShots, selectedFrameStyle);
+      }
+      return;
+    }
     if (id === "takePhoto") {
-      if (cameraStarting) return;
+      if (cameraStarting || boothShooting) return;
       if (!camWorking()) { startCamera(); return; }
-      selfieImg = captureCameraFrame();
-      stopCamera();
+      startBoothSequence();
       return;
     }
     if (id === "photoRedo") {
+      cancelBoothSequence();
+      stopCamera();
       selfieImg = null;
+      selfieShots = [];
       cameraError = "";
       return;
     }
@@ -426,9 +463,11 @@ function onButtonClick(id) {
 }
 
 function resetToStart() {
+  cancelBoothSequence();
   stopCamera();
   state = "wish";
   selfieImg = null;
+  selfieShots = [];
   liveWishText = "";
   finalWishText = "";
   stopPianoLoop();
@@ -444,7 +483,10 @@ function enterReleaseFx() {
 
 function getVisibleButtons() {
   if (state === "wish") return ["holdRecord"];
-  if (state === "selfie") return selfieImg ? ["photoRedo", "photoNext"] : ["takePhoto"];
+  if (state === "selfie") {
+    const frames = boothShooting ? [] : Object.keys(FRAME_OPTIONS);
+    return selfieImg ? [...frames, "photoRedo", "photoNext"] : [...frames, "takePhoto"];
+  }
   if (state === "final") return ["saveLantern"];
   if (state === "saved") return ["backToStart", "releaseAll"];
   if (state === "release_fx" || state === "release") return ["backToStart"];
@@ -533,7 +575,9 @@ function drawHUD() {
 
   const visible = getVisibleButtons();
   if (buttons.takePhoto) {
-    buttons.takePhoto.label = cameraStarting ? "開啟中…" : (camWorking() ? "拍下照片" : "開啟相機");
+    buttons.takePhoto.label = cameraStarting
+      ? "開啟中…"
+      : (boothShooting ? "拍攝中…" : (camWorking() ? "開始三連拍" : "開啟相機"));
   }
   for (const id of visible) buttons[id].draw(hud, isButtonHot(id));
 
@@ -549,13 +593,14 @@ function drawHUD() {
 }
 
 function isButtonHot(id) {
+  if (FRAME_OPTIONS[id] && FRAME_OPTIONS[id].key === selectedFrameStyle) return true;
   if (!pointerDown) return false;
   return pointerDownId === id;
 }
 
 function getTitleText() {
   if (state === "wish") return "STEP 1";
-  if (state === "selfie") return "STEP 2";
+  if (state === "selfie") return "STEP 2｜願望拍貼機";
   if (state === "final") return "STEP 3";
   if (state === "saved") return "STEP 4";
   if (state === "release_fx" || state === "release") return "釋放天燈";
@@ -565,10 +610,11 @@ function getTitleText() {
 function getSubtitleText() {
   if (state === "wish") return micHolding ? "放開就完成" : "按住錄音";
   if (state === "selfie") {
-    if (selfieImg) return "確認後按下一步";
+    if (selfieImg) return "三張拍貼完成，可換相框或重新拍攝";
+    if (boothShooting) return `自動連拍中｜第 ${boothShotNumber} / ${BOOTH_SHOT_COUNT} 張`;
     if (cameraStarting) return "正在要求相機權限";
     if (cameraError) return cameraError;
-    return camWorking() ? "相機已開啟，請按拍下照片" : "請先開啟相機";
+    return camWorking() ? "選好相框後，按一次開始三連拍" : "先選相框，再開啟相機";
   }
   if (state === "final") return "按下儲存天燈";
   if (state === "saved") return "接下來要做什麼？";
@@ -578,9 +624,9 @@ function getSubtitleText() {
 }
 
 function drawCameraScreen(yTop) {
-  const screenW = 760;
-  const screenH = 440;
-  const x = VW / 2 - screenW / 2;
+  const screenW = 720;
+  const screenH = 360;
+  const x = 60;
   const y = min(yTop, VH - screenH - 160);
 
   hud.noStroke();
@@ -594,7 +640,8 @@ function drawCameraScreen(yTop) {
 
   hud.noStroke();
   if (selfieImg) {
-    hud.image(selfieImg, x, y, screenW, screenH);
+    const previewSize = min(screenH, screenW);
+    hud.image(selfieImg, x + (screenW - previewSize) / 2, y, previewSize, previewSize);
   } else {
     const ok = camWorking();
     if (ok) {
@@ -612,10 +659,79 @@ function drawCameraScreen(yTop) {
     hud.textAlign(CENTER, CENTER);
     hud.textSize(40);
     const hint = ok
-      ? "臉放中間，再按拍下照片"
+      ? (boothShooting ? `第 ${boothShotNumber} 張準備中` : "臉放中間，按開始三連拍")
       : (cameraStarting ? "相機開啟中…" : (cameraError || "按開啟相機開始預覽"));
-    hud.text(hint, VW / 2, y + screenH - 35);
+    hud.text(hint, x + screenW / 2, y + screenH - 35);
+
+    if (boothShooting && boothCountdown > 0) {
+      hud.fill(8, 10, 24, 130);
+      hud.ellipse(x + screenW / 2, y + screenH / 2, 170, 170);
+      hud.noFill();
+      hud.stroke(255, 225, 120, 240);
+      hud.strokeWeight(7);
+      hud.ellipse(x + screenW / 2, y + screenH / 2, 150, 150);
+      hud.noStroke();
+      hud.fill(255);
+      hud.textAlign(CENTER, CENTER);
+      hud.textSize(100);
+      hud.text(boothCountdown, x + screenW / 2, y + screenH / 2 - 4);
+    }
+
+    if (Date.now() < boothFlashUntil) {
+      hud.fill(255, 255, 255, 225);
+      hud.rect(x, y, screenW, screenH);
+    }
   }
+
+  hud.noStroke();
+  hud.fill(8, 10, 24, 165);
+  roundedRect(hud, x + 18, y + 18, 112, 48, 18);
+  hud.fill(255);
+  hud.textAlign(CENTER, CENTER);
+  hud.textSize(24);
+  hud.text(`${selfieShots.length} / ${BOOTH_SHOT_COUNT}`, x + 74, y + 42);
+
+  drawFramePicker(y);
+}
+
+function drawFramePicker(y) {
+  const x = 812;
+  const w = 408;
+  const h = 360;
+  hud.noStroke();
+  hud.fill(16, 19, 42, 220);
+  roundedRect(hud, x, y - 16, w, h + 32, 22);
+  hud.noFill();
+  hud.stroke(255, 220, 140, 110);
+  hud.strokeWeight(2);
+  roundedRect(hud, x, y - 16, w, h + 32, 22);
+  hud.noStroke();
+  hud.fill(255);
+  hud.textAlign(CENTER, TOP);
+  hud.textSize(30);
+  hud.text("選擇拍貼相框", x + w / 2, y + 22);
+  hud.fill(210, 216, 242);
+  hud.textSize(22);
+  hud.text("拍完後也可以換框", x + w / 2, y + 64);
+
+  drawFrameSample(x + 96, y + 222, selectedFrameStyle);
+}
+
+function drawFrameSample(cx, cy, style) {
+  const palette = getFramePalette(style);
+  const w = 216;
+  const h = 112;
+  hud.noStroke();
+  hud.fill(...palette.bg);
+  roundedRect(hud, cx, cy, w, h, 16);
+  hud.fill(...palette.paper);
+  roundedRect(hud, cx + 14, cy + 14, 56, 70, 8);
+  roundedRect(hud, cx + 80, cy + 14, 56, 70, 8);
+  roundedRect(hud, cx + 146, cy + 14, 56, 70, 8);
+  hud.fill(...palette.ink);
+  hud.textAlign(CENTER, CENTER);
+  hud.textSize(20);
+  hud.text("WISH BOOTH ✦", cx + w / 2, cy + 98);
 }
 
 function camWorking() {
@@ -678,6 +794,149 @@ function captureCameraFrame() {
   return img;
 }
 
+async function startBoothSequence() {
+  if (!camWorking() || boothShooting) return;
+  const session = ++boothSession;
+  boothShooting = true;
+  boothCountdown = 0;
+  boothShotNumber = 1;
+  selfieImg = null;
+  selfieShots = [];
+
+  for (let i = 0; i < BOOTH_SHOT_COUNT; i++) {
+    boothShotNumber = i + 1;
+    for (let count = 3; count >= 1; count--) {
+      if (session !== boothSession || !camWorking()) return;
+      boothCountdown = count;
+      await waitForBooth(720);
+    }
+
+    if (session !== boothSession || !camWorking()) return;
+    boothCountdown = 0;
+    const shot = captureCameraFrame();
+    if (shot) selfieShots.push(shot);
+    boothFlashUntil = Date.now() + 190;
+    if (navigator.vibrate) navigator.vibrate(55);
+    await waitForBooth(720);
+  }
+
+  if (session !== boothSession) return;
+  boothShooting = false;
+  boothShotNumber = 0;
+  boothCountdown = 0;
+  selfieImg = composePhotoBoothCard(selfieShots, selectedFrameStyle);
+  stopCamera();
+}
+
+function cancelBoothSequence() {
+  boothSession++;
+  boothShooting = false;
+  boothCountdown = 0;
+  boothShotNumber = 0;
+  boothFlashUntil = 0;
+}
+
+function waitForBooth(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function composePhotoBoothCard(shots, style) {
+  if (!shots || shots.length !== BOOTH_SHOT_COUNT) return null;
+  const palette = getFramePalette(style);
+  const card = createGraphics(900, 900);
+  card.pixelDensity(1);
+  card.background(...palette.bg);
+
+  card.noStroke();
+  card.fill(...palette.paper);
+  roundedRect(card, 24, 22, 852, 856, 38);
+
+  card.fill(...palette.ink);
+  card.textAlign(CENTER, CENTER);
+  card.textStyle(BOLD);
+  card.textSize(42);
+  card.text("WISH BOOTH", 450, 66);
+  card.textStyle(NORMAL);
+  card.textSize(22);
+  card.text("三張照片・一個願望・好多祝福", 450, 104);
+
+  drawBoothPhoto(card, shots[0], 58, 136, 784, 372, palette);
+  drawBoothPhoto(card, shots[1], 58, 532, 378, 240, palette);
+  drawBoothPhoto(card, shots[2], 464, 532, 378, 240, palette);
+
+  card.fill(...palette.ink);
+  card.textAlign(CENTER, CENTER);
+  card.textSize(26);
+  card.text("願望會發光  ✦  WISHES COME TRUE", 450, 824);
+
+  drawBoothDecorations(card, style, palette);
+  const result = card.get();
+  card.remove();
+  return result;
+}
+
+function drawBoothPhoto(g, img, x, y, w, h, palette) {
+  g.noStroke();
+  g.fill(25, 20, 40, 45);
+  roundedRect(g, x + 5, y + 7, w, h, 20);
+  g.fill(...palette.accent);
+  roundedRect(g, x - 7, y - 7, w + 14, h + 14, 22);
+  g.fill(255);
+  roundedRect(g, x, y, w, h, 16);
+
+  const iw = max(1, img.width || 1);
+  const ih = max(1, img.height || 1);
+  const scale = max(w / iw, h / ih);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  g.push();
+  g.drawingContext.save();
+  g.drawingContext.beginPath();
+  g.drawingContext.rect(x, y, w, h);
+  g.drawingContext.clip();
+  g.image(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  g.drawingContext.restore();
+  g.pop();
+}
+
+function drawBoothDecorations(g, style, palette) {
+  g.fill(...palette.accent);
+  g.noStroke();
+  g.textAlign(CENTER, CENTER);
+  g.textStyle(BOLD);
+  if (style === "hearts") {
+    g.textSize(34);
+    g.text("♡", 70, 70); g.text("♡", 830, 70);
+    g.text("♥", 42, 810); g.text("♥", 858, 810);
+  } else if (style === "stars") {
+    g.textSize(34);
+    g.text("✦", 70, 70); g.text("✧", 830, 70);
+    g.text("★", 42, 810); g.text("★", 858, 810);
+  } else if (style === "dream") {
+    g.textSize(32);
+    g.text("☾", 70, 70); g.text("✦", 830, 70);
+    g.text("✧", 42, 810); g.text("☁", 858, 810);
+  } else {
+    g.textSize(24);
+    g.text("●", 58, 68); g.text("●", 842, 68);
+    g.text("—", 52, 810); g.text("—", 848, 810);
+  }
+  g.textStyle(NORMAL);
+}
+
+function getFramePalette(style) {
+  if (style === "stars") {
+    return { bg: [226, 180, 82], paper: [255, 249, 226], ink: [78, 52, 18], accent: [255, 214, 105] };
+  }
+  if (style === "dream") {
+    return { bg: [145, 112, 211], paper: [246, 238, 255], ink: [72, 43, 112], accent: [191, 155, 244] };
+  }
+  if (style === "classic") {
+    return { bg: [34, 38, 52], paper: [250, 250, 248], ink: [32, 34, 42], accent: [205, 208, 218] };
+  }
+  return { bg: [248, 145, 187], paper: [255, 239, 246], ink: [112, 40, 78], accent: [255, 102, 161] };
+}
+
 function stopCamera() {
   if (cameraStream) {
     cameraStream.getTracks().forEach((track) => track.stop());
@@ -691,7 +950,10 @@ function stopCamera() {
   }
 }
 
-window.addEventListener("pagehide", stopCamera);
+window.addEventListener("pagehide", () => {
+  cancelBoothSequence();
+  stopCamera();
+});
 
 function drawFinalPreview(yTop) {
   const cardW = 980;
@@ -951,7 +1213,7 @@ class CanvasButton {
     g.fill(35, 20, 40, 220);
     g.textAlign(CENTER, CENTER);
 
-    const ts = this.h >= 200 ? 64 : (this.h >= 120 ? 50 : 40);
+    const ts = this.h >= 200 ? 64 : (this.h >= 120 ? 50 : (this.h <= 60 ? 24 : 40));
     g.textSize(ts);
     g.text(this.label, this.x + this.w / 2, this.y + this.h / 2 + 2);
   }
