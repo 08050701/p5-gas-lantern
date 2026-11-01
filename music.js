@@ -119,7 +119,8 @@ const RetroSfx = (() => {
     tick(){ noise(.05,1900,.5); },
     clunk(){ noise(.14,300,1.1); },
     roll(){ noise(.5,700,.4); },
-    pop(){ noise(.1,1200,.8); ring(880,.5,.09); }
+    pop(){ noise(.1,1200,.8); ring(880,.5,.09); },
+    ignite(){ noise(.25,2600,.5); noise(1.4,420,.5); }
   };
 })();
 window.RetroSfx = RetroSfx;

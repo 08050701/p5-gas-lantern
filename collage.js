@@ -4,12 +4,19 @@
 const FRAME_STYLES = {
   album:{ ink:"#efe6d2" },
   postcard:{ ink:"#23435a" },
-  red:{ ink:"#ffe9b8" }
+  red:{ ink:"#ffe9b8" },
+  floral:{ ink:"#4a1c14" },
+  notebook:{ ink:"#26415e" },
+  news:{ ink:"#1d1a15" },
+  yearbook:{ ink:"#f3e0ad" },
+  theater:{ ink:"#ffd95c" }
 };
 const HAND = "'LXGW WenKai TC','Noto Serif TC',serif";
 const SERIF = "'Noto Serif TC',serif";
 const PHOTO_W = 520, PHOTO_H = 390;
 const PHOTO_SLOTS = [{x:66,y:76,tilt:-.022},{x:316,y:444,tilt:.018},{x:66,y:808,tilt:-.014}];
+// 上方有報頭、招牌的相紙，照片往下排
+const LOW_SLOTS = [{x:60,y:206,tilt:-.016},{x:320,y:548,tilt:.014},{x:60,y:878,tilt:-.012}];
 const CN_DAYS = "日一二三四五六";
 
 function font(c,weight,size,family=SERIF){ c.font = `${weight} ${size}px ${family}`; }
@@ -92,6 +99,160 @@ function paperCutCorner(c){
   [[20,20,10],[46,20,6],[20,46,6]].forEach(([x,y,r])=>{ c.beginPath(); c.arc(x,y,r,0,7); c.fill(); });
 }
 
+// 阿嬤的棉被花布：大紅底、粉牡丹
+function peony(c,x,y,r){
+  c.fillStyle="#2f7d5a";
+  for(let i=0;i<5;i++){ const a=i*1.26+x; rotated(c,x+Math.cos(a)*r*1.1,y+Math.sin(a)*r*1.1,a,()=>{ c.beginPath(); c.ellipse(0,0,r*.72,r*.3,0,0,7); c.fill(); }); }
+  [[1,"#f28ea3",9],[.72,"#f7b5c2",7],[.44,"#fde3e4",6]].forEach(([k,color,count])=>{
+    c.fillStyle=color;
+    for(let i=0;i<count;i++){ const a=i/count*6.283+k; c.beginPath(); c.arc(x+Math.cos(a)*r*k*.62,y+Math.sin(a)*r*k*.62,r*k*.46,0,7); c.fill(); }
+  });
+  c.fillStyle="#f4c84a"; c.beginPath(); c.arc(x,y,r*.14,0,7); c.fill();
+}
+
+function paperFloral(c){
+  c.fillStyle="#b3241f"; c.fillRect(0,0,900,1500);
+  fibers(c,900,1500,4000,.4);
+  for(let row=0;row<8;row++) for(let col=0;col<6;col++){
+    const x=(col+(row%2)*.5)*190-30, y=row*210+20;
+    peony(c,x,y,62);
+    c.fillStyle="#fbe6a0"; c.beginPath(); c.arc(x+96,y+104,15,0,7); c.fill();
+    c.fillStyle="#2c6fa0"; c.beginPath(); c.arc(x+96,y+104,6,0,7); c.fill();
+  }
+  vignette(c,"70,8,4");
+}
+
+function clothPatch(c,x,y,w,h){
+  c.save(); c.shadowColor="rgba(0,0,0,.5)"; c.shadowBlur=14; c.shadowOffsetY=5;
+  c.fillStyle="#f6ecd4"; c.fillRect(x,y,w,h); c.restore();
+  c.strokeStyle="#b3241f"; c.lineWidth=3; c.setLineDash([14,9]); c.strokeRect(x+10,y+10,w-20,h-20); c.setLineDash([]);
+}
+
+// 國小作業簿：綠格子、紅線、老師的甲上
+function paperNotebook(c){
+  c.fillStyle="#f4eddb"; c.fillRect(0,0,900,1500);
+  fibers(c,900,1500,4000,.5);
+  c.strokeStyle="rgba(84,140,104,.5)"; c.lineWidth=1.5;
+  for(let x=20;x<900;x+=72){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,1500); c.stroke(); }
+  for(let y=20;y<1500;y+=72){ c.beginPath(); c.moveTo(0,y); c.lineTo(900,y); c.stroke(); }
+  c.strokeStyle="#c9402f"; c.lineWidth=3; c.beginPath(); c.moveTo(38,0); c.lineTo(38,1500); c.stroke();
+}
+
+function gradeStamp(c,x,y,word){
+  rotated(c,x,y,-.22,()=>{
+    c.strokeStyle=c.fillStyle="#c9281e"; c.lineWidth=7; c.globalAlpha=.86;
+    c.beginPath(); c.arc(0,0,76,0,7); c.stroke();
+    font(c,700,54,HAND); c.textAlign="center"; c.textBaseline="middle"; c.fillText(word,0,3);
+    c.globalAlpha=1;
+  });
+}
+
+function bookLabel(c,x,y,scene,roc){
+  const w=222, h=282;
+  rotated(c,x,y,.03,()=>{
+    c.save(); c.shadowColor="rgba(0,0,0,.35)"; c.shadowBlur=10; c.shadowOffsetY=4;
+    c.fillStyle="#fffaf0"; c.fillRect(-w/2,-h/2,w,h); c.restore();
+    c.strokeStyle="#c9402f"; c.lineWidth=3; c.strokeRect(-w/2+8,-h/2+8,w-16,h-16);
+    c.fillStyle="#26415e"; c.textAlign="center"; c.textBaseline="middle";
+    font(c,700,35); c.fillText("國語作業簿",0,-82);
+    font(c,700,24,HAND); c.textAlign="left";
+    c.fillText("班級：願望班",-w/2+24,-22);
+    c.fillText(`地點：${scene.icon}`,-w/2+24,24);
+    c.fillText(`日期：${roc}`,-w/2+24,70);
+  });
+}
+
+function pencil(c,x,y,angle){
+  rotated(c,x,y,angle,()=>{
+    c.save(); c.shadowColor="rgba(0,0,0,.35)"; c.shadowBlur=8; c.shadowOffsetY=5;
+    c.fillStyle="#e9b52e"; c.fillRect(-120,-11,220,22); c.restore();
+    c.fillStyle="#c9972a"; c.fillRect(-120,3,220,8);
+    c.fillStyle="#e8c8a0"; c.beginPath(); c.moveTo(100,-11); c.lineTo(138,0); c.lineTo(100,11); c.fill();
+    c.fillStyle="#2a2a2a"; c.beginPath(); c.moveTo(126,-3.5); c.lineTo(138,0); c.lineTo(126,3.5); c.fill();
+    c.fillStyle="#b9b9b0"; c.fillRect(-136,-11,18,22);
+    c.fillStyle="#e27f8c"; c.fillRect(-158,-11,24,22);
+  });
+}
+
+function goldStar(c,x,y,r,color="#e8b72e"){
+  c.fillStyle=color; c.beginPath();
+  for(let i=0;i<10;i++){ const a=i*Math.PI/5-Math.PI/2, q=i%2?r*.45:r; c.lineTo(x+Math.cos(a)*q,y+Math.sin(a)*q); }
+  c.closePath(); c.fill();
+}
+
+// 老報紙：直排報頭、灰字欄
+function paperNews(c){
+  c.fillStyle="#e6dcc0"; c.fillRect(0,0,900,1500);
+  fibers(c,900,1500,9000,.3);
+  vignette(c,"110,80,40");
+}
+
+// 小字內文：用真的字直排，看起來才像報紙
+function newsText(c,text,x,y,w,h){
+  const chars=[...text.repeat(40)], size=17, rows=Math.floor(h/(size+2));
+  c.fillStyle="rgba(40,34,26,.82)"; font(c,600,size); c.textAlign="center"; c.textBaseline="middle";
+  let i=0;
+  for(let col=x+w-size/2;col>x;col-=size+7) for(let row=0;row<rows;row++) c.fillText(chars[i++],col,y+row*(size+2)+size/2);
+}
+
+function newsMasthead(c,date,roc,serial){
+  c.fillStyle="#1d1a15"; font(c,700,112); c.textAlign="left"; c.textBaseline="middle"; c.fillText("願望日報",48,104);
+  font(c,700,24); c.textAlign="right";
+  c.fillText(`中華民國${date.getFullYear()-1911}年${date.getMonth()+1}月${date.getDate()}日`,852,62);
+  c.fillText(`星期${CN_DAYS[date.getDay()]}　第 ${serial} 號`,852,100);
+  c.fillText("零售每份壹圓",852,138);
+  c.fillRect(44,176,812,6); c.fillRect(44,186,812,2);
+}
+
+// 畢業冊：藍布面、燙金字
+function paperYearbook(c){
+  c.fillStyle="#1f3450"; c.fillRect(0,0,900,1500);
+  fibers(c,900,1500,9000,.55);
+  vignette(c,"6,12,26");
+  c.strokeStyle="#d8b65e"; c.lineWidth=5; c.strokeRect(24,24,852,1452);
+  c.lineWidth=2; c.strokeRect(36,36,828,1428);
+}
+
+function schoolBadge(c,x,y,r,word){
+  c.strokeStyle=c.fillStyle="#d8b65e"; c.lineWidth=4;
+  c.beginPath(); c.arc(x,y,r,0,7); c.stroke();
+  c.lineWidth=2; c.beginPath(); c.arc(x,y,r-9,0,7); c.stroke();
+  goldStar(c,x,y-2,r*.56,"#d8b65e");
+  c.fillStyle="#1f3450"; font(c,700,r*.32); c.textAlign="center"; c.textBaseline="middle"; c.fillText(word,x,y);
+}
+
+// 戲院看板：深藍底、膠卷孔、手繪大字
+function paperTheater(c){
+  c.fillStyle="#13202e"; c.fillRect(0,0,900,1500);
+  fibers(c,900,1500,6000,.5);
+  vignette(c,"0,0,0");
+  c.fillStyle="#05090e"; c.fillRect(0,0,38,1500); c.fillRect(862,0,38,1500);
+  c.fillStyle="#f3e6cc";
+  for(let y=14;y<1500;y+=46){ [9,871].forEach(x=>c.fillRect(x,y,20,26)); }
+}
+
+function paintedTitle(c,title){
+  c.textAlign="center"; c.textBaseline="middle";
+  font(c,700,30); c.fillStyle="#f3e6cc"; c.fillText("★ 本 日 放 映 ★",450,52);
+  let size=96; do{ font(c,700,size); size-=4; }while(c.measureText(title).width>760);
+  c.lineWidth=12; c.strokeStyle="#a8181c"; c.lineJoin="round"; c.strokeText(title,450,128);
+  c.fillStyle="#ffd95c"; c.fillText(title,450,128);
+}
+
+function movieTicket(c,x,y,angle,serial){
+  const w=220, h=120;
+  rotated(c,x,y,angle,()=>{
+    c.save(); c.shadowColor="rgba(0,0,0,.6)"; c.shadowBlur=12; c.shadowOffsetY=5;
+    c.fillStyle="#e9a6a0"; c.fillRect(-w/2,-h/2,w,h); c.restore();
+    c.strokeStyle="#7a241f"; c.lineWidth=2; c.strokeRect(-w/2+7,-h/2+7,w-14,h-14);
+    c.setLineDash([6,6]); c.beginPath(); c.moveTo(w/2-58,-h/2); c.lineTo(w/2-58,h/2); c.stroke(); c.setLineDash([]);
+    c.fillStyle="#7a241f"; c.textAlign="center"; c.textBaseline="middle";
+    font(c,700,34); c.fillText("戲 票",-34,-16);
+    font(c,600,19); c.fillText(`全票 壹圓`,-34,26);
+    font(c,600,16); c.fillText(serial.slice(0,3),w/2-30,0);
+  });
+}
+
 // ── 舊照片 ─────────────────────────────
 function deckle(c,x,y,w,h){
   const step=14, bite=3.6;
@@ -129,7 +290,9 @@ function oldPhoto(c,img,slot,kind,caption){
     deckle(c,-border,-border,w+border*2,h+border*2);
     c.fillStyle="#fbf5e6"; c.fill();
     c.restore();
+    if(kind==="news") c.filter="grayscale(1) contrast(1.12)";
     c.drawImage(img,0,0,w,h);
+    c.filter="none";
     c.strokeStyle="rgba(60,40,20,.3)"; c.lineWidth=1; c.strokeRect(0,0,w,h);
     if(caption){
       // 照相館常見的白字題字
@@ -137,7 +300,7 @@ function oldPhoto(c,img,slot,kind,caption){
       font(c,700,27,HAND); c.textAlign="left"; c.textBaseline="alphabetic"; c.fillText(caption,16,h-16); c.restore();
     }
     if(kind==="album") photoCorners(c,w,h,border);
-    if(kind==="postcard"){ tape(c,w/2,-border,.03,"rgba(226,206,150,.78)"); }
+    if(kind==="postcard"||kind==="notebook"){ tape(c,w/2,-border,.03,"rgba(226,206,150,.78)"); }
     if(kind==="red"){ c.strokeStyle="#e6c26a"; c.lineWidth=3; c.strokeRect(-border+6,-border+6,w+border*2-12,h+border*2-12); }
   });
 }
@@ -281,7 +444,7 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
   const text=blessingText||"願您平安健康，天天歡喜。";
   await Promise.allSettled([
     document.fonts.load(`700 40px 'LXGW WenKai TC'`,text+scene.title+"留影"),
-    document.fonts.load(`700 40px 'Noto Serif TC'`,scene.title+"民國普通車願望號票價壹圓福好運星期月年農曆明信片郵便")
+    document.fonts.load(`700 40px 'Noto Serif TC'`,scene.title+scene.poem+"民國普通車願望號票價壹圓福好運星期月年農曆明信片郵便國語作業簿班級地點日期老師評語甲上優本報記者今日前往採訪鄉親都說子平安最要緊大家歡喜合照留念轉來坐影業全省聯映日報日報中華星期第零售每份同窗留念畢業贈言勿忘影中人友誼長存本日放映戲全學校屆")
   ]);
   c.canvas.width=900; c.canvas.height=1500;
   const caption=`${scene.title}留影 ${roc}`;
@@ -305,6 +468,55 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
     c.fillText("明信片　POST CARD",74,1262);
     ruledLines(c,70,760,1346,56,2,"rgba(35,67,90,.55)");
     blessing(c,text,FRAME_STYLES.postcard.ink,74,750,1290,1464);
+  }else if(frame==="floral"){
+    paperFloral(c);
+    images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"red",i===2?caption:""));
+    calendar(c,752,226,.05,date);
+    trainTicket(c,180,640,-1.38,scene.title,serial);
+    clothPatch(c,664,876,172,330);
+    c.fillStyle=FRAME_STYLES.floral.ink; font(c,700,44,HAND); verticalText(c,scene.title.slice(0,6),750,1040,50);
+    clothPatch(c,52,1244,796,226);
+    blessing(c,text,FRAME_STYLES.floral.ink,84,732,1262,1452);
+  }else if(frame==="notebook"){
+    paperNotebook(c);
+    images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"notebook",i===2?caption:""));
+    bookLabel(c,750,232,scene,roc);
+    pencil(c,170,650,-.5);
+    goldStar(c,100,520,44); goldStar(c,214,760,34,"#d8503f");
+    gradeStamp(c,750,1020,"甲上");
+    c.fillStyle="#c9281e"; font(c,700,34,HAND); c.textAlign="center"; c.textBaseline="middle"; c.fillText("老師評語",750,1168);
+    blessing(c,text,FRAME_STYLES.notebook.ink,78,750,1250,1464);
+  }else if(frame==="news"){
+    paperNews(c);
+    newsMasthead(c,date,roc,serial);
+    const story=`${scene.title}${scene.poem}本報記者今日前往採訪，鄉親都說日子平安最要緊，大家歡歡喜喜合照留念。`;
+    newsText(c,story,616,206,240,330);
+    newsText(c,story,44,560,258,306);
+    newsText(c,story,616,1006,240,270);
+    images.forEach((img,i)=>oldPhoto(c,img,LOW_SLOTS[i],"news",i===2?caption:""));
+    c.fillStyle="#1d1a15"; c.fillRect(44,1300,812,4);
+    font(c,700,27); c.textAlign="left"; c.textBaseline="middle"; c.fillText(`本報訊　${scene.icon}傳來好消息：`,50,1330);
+    blessing(c,text,FRAME_STYLES.news.ink,50,800,1350,1476,SERIF);
+  }else if(frame==="yearbook"){
+    paperYearbook(c);
+    c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,74); c.textAlign="center"; c.textBaseline="middle"; c.fillText("同 窗 留 念",450,96);
+    font(c,700,26); c.fillText(`民國${date.getFullYear()-1911}年　願望國民學校　第${Number(serial.slice(0,2))}屆畢業`,450,162);
+    schoolBadge(c,110,104,52,"願");
+    images.forEach((img,i)=>oldPhoto(c,img,LOW_SLOTS[i],"plain",i===2?caption:""));
+    c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,46,HAND); verticalText(c,"勿忘影中人",738,372,50);
+    verticalText(c,"友誼長存",170,738,50);
+    verticalText(c,scene.title.slice(0,6),742,1092,44);
+    c.save(); c.shadowColor="rgba(0,0,0,.5)"; c.shadowBlur=12; c.fillStyle="#f4ead2"; c.fillRect(60,1300,780,170); c.restore();
+    blessing(c,text,"#26334a",84,732,1306,1464);
+  }else if(frame==="theater"){
+    paperTheater(c);
+    paintedTitle(c,scene.title);
+    images.forEach((img,i)=>oldPhoto(c,img,LOW_SLOTS[i],"plain",i===2?caption:""));
+    goldStar(c,740,270,40,"#ffd95c"); goldStar(c,800,360,28,"#ffd95c"); goldStar(c,696,392,22,"#ffd95c");
+    c.fillStyle="#f3e6cc"; font(c,700,32,HAND); verticalText(c,"轉來坐影業",170,738,42);
+    movieTicket(c,742,1064,-.12,serial);
+    c.fillStyle="#f3e6cc"; font(c,700,26); c.textAlign="center"; c.textBaseline="middle"; c.fillText("全 省 聯 映",742,1190);
+    blessing(c,text,FRAME_STYLES.theater.ink,76,748,1300,1470);
   }else{
     paperRed(c);
     images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"red",i===2?caption:""));

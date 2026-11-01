@@ -17,9 +17,18 @@ const SCENES = [
   { key:"harvest", title:"農村割稻", icon:"農村", image:"assets/taiwan-harvest.jpg", poem:"稻子熟了，全家都下田。" },
   { key:"lvchuan", title:"臺中綠川", icon:"臺中", image:"assets/taiwan-lvchuan.jpg", poem:"柳樹沿著河邊垂下來。" },
   { key:"longshan", title:"艋舺龍山寺", icon:"艋舺", image:"assets/taiwan-longshan.jpg", poem:"來這裡拜拜，求個平安。" },
-  { key:"guanziling", title:"關子嶺溫泉", icon:"關子嶺", image:"assets/taiwan-guanziling.jpg", poem:"山裡的溫泉旅社。" }
+  { key:"guanziling", title:"關子嶺溫泉", icon:"關子嶺", image:"assets/taiwan-guanziling.jpg", poem:"山裡的溫泉旅社。" },
+  { key:"mtali", title:"阿里山村落", icon:"阿里山", image:"assets/taiwan-mtali.jpg", poem:"山腰上的小村子，炊煙慢慢升起。" },
+  { key:"yushan", title:"阿里山望玉山", icon:"阿里山", image:"assets/taiwan-yushan.jpg", poem:"沿著鐵道走，遠遠看得到玉山。" },
+  { key:"xiziwan", title:"西子灣海水浴場", icon:"高雄", image:"assets/taiwan-xiziwan.jpg", poem:"彩旗飄飄，沙灘上好熱鬧。" },
+  { key:"cijin", title:"旗後海水浴場", icon:"旗後", image:"assets/taiwan-cijin.jpg", poem:"浪打過來，大家笑成一團。" },
+  { key:"yancheng", title:"高雄銀座", icon:"鹽埕", image:"assets/taiwan-yancheng.jpg", poem:"穿得漂漂亮亮，來逛街。" },
+  { key:"fengshan", title:"鳳山街景", icon:"鳳山", image:"assets/taiwan-fengshan.jpg", poem:"從高處看，整條街都在眼前。" },
+  { key:"shimen", title:"牡丹石門", icon:"屏東", image:"assets/taiwan-shimen.jpg", poem:"兩邊山壁夾著一條溪。" },
+  { key:"jiaoban", title:"角板山台車", icon:"桃園", image:"assets/taiwan-jiaoban.jpg", poem:"推著小台車，過山邊的木橋。" }
 ];
 
+const WISH_MAX = 300;
 const sceneImages = {};
 const state = { liveRun:0, screen:"gacha", scene:SCENES[0], wish:"", frame:"album", shots:[], collage:"", blessing:"", blessingPromise:null, stream:null, listening:false, busy:false, bgFront:"a" };
 const $ = (selector, root=document) => root.querySelector(selector);
@@ -51,6 +60,8 @@ function bindEvents(){
   $("#micBtn").addEventListener("click", startSpeech);
   $("#toCameraBtn").addEventListener("click", enterCamera);
   $("#startShotsBtn").addEventListener("click", shootSequence);
+  $("#poseRollBtn").addEventListener("click", rollPoses);
+  $("#lightBtn").addEventListener("click", lightLantern);
   $("#retakeBtn").addEventListener("click", retake);
   $("#saveBtn").addEventListener("click", preparePickup);
   $("#downloadBtn").addEventListener("click", downloadCollage);
@@ -90,6 +101,7 @@ function showScreen(name){
   const step = ({gacha:0,reveal:0,wish:1,camera:2,review:3,pickup:3,finale:3})[name] ?? 0;
   progressDots.forEach((dot,index) => dot.classList.toggle("is-active", index === step));
   if(name !== "camera") stopCamera();
+  if(name !== "finale") window.LanternSky?.close();
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
@@ -116,21 +128,29 @@ async function spinGacha(){
   state.busy = true;
   const choices = SCENES.filter(scene => scene.key !== state.scene.key);
   const chosen = choices[Math.floor(Math.random()*choices.length)];
+  $(".hero").classList.add("is-spinning");
   if(window.Gacha3D){
     // 背景隱藏時動畫會停，等太久就直接揭曉
-    await Promise.race([window.Gacha3D.spin(chosen.title),sleep(14000)]);
+    await Promise.race([window.Gacha3D.spin(chosen.title),sleep(16000)]);
   }else{
     const machine = $("#machineWrap");
     machine.classList.add("is-spinning");
     await sleep(1500);
     machine.classList.remove("is-spinning");
   }
+  // 開蛋的光慢慢鋪滿，再換到揭曉畫面，不要硬切
+  const wipe = $("#sceneWipe");
+  wipe.classList.add("is-on");
+  await sleep(520);
   setScene(chosen);
   $("#sceneIcon").textContent = chosen.icon;
   $("#sceneTitle").textContent = chosen.title;
   $("#scenePoem").textContent = chosen.poem;
   showScreen("reveal");
+  $(".hero").classList.remove("is-spinning");
   window.Gacha3D?.reset();
+  await sleep(80);
+  wipe.classList.remove("is-on");
   state.busy = false;
 }
 
@@ -150,7 +170,7 @@ function openWishDialog(){
 }
 
 function updateCharCount(){
-  $("#charCount").textContent = `${$("#wishInput").value.length} / 160`;
+  $("#charCount").textContent = `${$("#wishInput").value.length} / ${WISH_MAX}`;
 }
 
 function submitTypedWish(event){
@@ -164,7 +184,7 @@ function submitTypedWish(event){
 }
 
 function acceptWish(wish){
-  state.wish = wish.slice(0,160);
+  state.wish = wish.slice(0,WISH_MAX);
   $("#wishText").textContent = `「${state.wish}」`;
   $("#wishPreview").hidden = false;
   $("#micBtn").hidden = true;
@@ -174,42 +194,79 @@ function acceptWish(wish){
   BgSwap.load();
 }
 
+// 長輩講話會停頓：講到一半停下來不算講完。
+// 一直聽到按「說完了」，或安靜夠久、或到時間上限才結束。
+const LISTEN_MAX = 120000, SILENCE_AFTER_SPEECH = 9000, SILENCE_NO_SPEECH = 20000;
+
 function startSpeech(){
+  if(state.listening){ state.stopListening?.(); return; }
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!Recognition){
     $("#micStatus").textContent = "這個瀏覽器無法使用語音，已切換成打字";
     openWishDialog();
     return;
   }
-  if(state.listening) return;
   const recognition = new Recognition();
   recognition.lang = "zh-TW";
   recognition.interimResults = true;
-  recognition.continuous = false;
+  recognition.continuous = true;
+  const parts = [];
+  let interim = "", silenceTimer = 0, maxTimer = 0, stopping = false;
+  const heard = () => (parts.join("")+interim).trim();
+  const keepWaiting = () => { clearTimeout(silenceTimer); silenceTimer = setTimeout(stop, heard() ? SILENCE_AFTER_SPEECH : SILENCE_NO_SPEECH); };
+  const stop = () => { stopping = true; clearTimeout(silenceTimer); clearTimeout(maxTimer); try{ recognition.stop(); }catch(_){ finish(); } };
+  const finish = () => {
+    clearTimeout(silenceTimer); clearTimeout(maxTimer);
+    state.stopListening = null;
+    finishListening();
+    if(heard()) acceptWish(heard());
+    else $("#micStatus").textContent = "沒有聽清楚，再試一次或改用打字";
+  };
+  state.stopListening = stop;
   state.listening = true;
   $("#micBtn").classList.add("is-listening");
-  $("#micStatus").textContent = "正在聽…說完後停一下";
-  let transcript = "";
+  $(".mic-icon").textContent = "說完了";
+  $("#micStatus").textContent = "慢慢說，說完按一下";
   recognition.onresult = event => {
-    transcript = [...event.results].map(result => result[0].transcript).join("");
-    $("#micStatus").textContent = transcript || "正在聽…";
+    interim = "";
+    for(let i=event.resultIndex;i<event.results.length;i++){
+      const text = event.results[i][0].transcript;
+      if(!event.results[i].isFinal){ interim += text; continue; }
+      // 有些手機會把同一句連續回報，只留最長的那次
+      const last = parts[parts.length-1];
+      if(last && text.startsWith(last)) parts[parts.length-1] = text;
+      else if(!last || !last.endsWith(text)) parts.push(text);
+    }
+    $("#micStatus").textContent = heard() || "正在聽…";
+    keepWaiting();
   };
-  recognition.onerror = () => {
+  recognition.onerror = event => {
+    if(event.error === "no-speech" || event.error === "aborted") return;
+    stopping = true;
+    clearTimeout(silenceTimer); clearTimeout(maxTimer);
+    state.stopListening = null;
     finishListening();
+    if(heard()){ acceptWish(heard()); return; }
     $("#micStatus").textContent = "沒有收到聲音，改用打字也可以";
     openWishDialog();
   };
+  // 瀏覽器自己斷線時接回去，繼續聽
   recognition.onend = () => {
-    finishListening();
-    if(transcript.trim()) acceptWish(transcript.trim());
-    else $("#micStatus").textContent = "沒有聽清楚，再試一次或改用打字";
+    if(!state.listening) return;
+    interim && parts.push(interim);
+    interim = "";
+    if(stopping) finish();
+    else try{ recognition.start(); }catch(_){ finish(); }
   };
+  maxTimer = setTimeout(stop,LISTEN_MAX);
+  keepWaiting();
   try{ recognition.start(); }catch(_){ finishListening(); openWishDialog(); }
 }
 
 function finishListening(){
   state.listening = false;
   $("#micBtn").classList.remove("is-listening");
+  $(".mic-icon").textContent = "說話";
 }
 
 async function requestBlessing(){
@@ -238,7 +295,22 @@ async function requestBlessing(){
 async function enterCamera(){
   if(!state.wish){ openWishDialog(); return; }
   showScreen("camera");
+  rollPoses();
   await startCamera();
+}
+
+function rollPoses(){
+  if(state.busy) return;
+  const set = PoseGuide.next();
+  $("#poseTitle").textContent = `${set.title}`;
+  $("#poseList").innerHTML = PoseGuide.labels(set.poses).map((label,i)=>`<li>${i+1}. ${label}</li>`).join("");
+  highlightPose(0);
+}
+
+function highlightPose(shot){
+  const set = PoseGuide.current();
+  $$("#poseList li").forEach((item,i) => item.classList.toggle("is-now",i===shot));
+  PoseGuide.show($("#poseGuide"),set.poses[shot]);
 }
 
 function sceneImage(){
@@ -309,7 +381,11 @@ async function shootSequence(){
   renderShotSlots();
   $("#startShotsBtn").disabled = true;
   for(let shot=0;shot<3;shot++){
-    $("#cameraNote").textContent = `第 ${shot+1} 張，準備看鏡頭`;
+    highlightPose(shot);
+    const label = PoseGuide.labels([PoseGuide.current().poses[shot]])[0];
+    $("#cameraNote").textContent = `第 ${shot+1} 張：${label}`;
+    $("#countdown").textContent = "";
+    await sleep(1700);
     for(let n=3;n>=1;n--){
       $("#countdown").textContent = n;
       await sleep(720);
@@ -381,7 +457,7 @@ async function preparePickup(){
   const mount=$("#qrMount");
   mount.innerHTML='<div class="qr-loading">照片上傳中…</div>';
   try{
-    const response=await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"savePhoto",imageData:state.collage,wish:state.wish.slice(0,160),scene:state.scene.key})});
+    const response=await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"savePhoto",imageData:state.collage,wish:state.wish.slice(0,WISH_MAX),scene:state.scene.key})});
     const data=await response.json();
     if(!data.ok || !data.claimUrl) throw new Error(data.error || "沒有取得領取網址");
     renderQR(String(data.claimUrl),mount);
@@ -400,12 +476,34 @@ function renderQR(text,mount){
 function downloadCollage(){
   if(!state.collage) return;
   const link=document.createElement("a");
-  link.download=`願望相片-${Date.now()}.jpg`; link.href=state.collage; link.click();
+  link.download=`轉來坐-${Date.now()}.jpg`; link.href=state.collage; link.click();
 }
 
-function showFinale(){
+async function showFinale(){
   showScreen("finale");
-  const sky=$("#lanternSky"); sky.innerHTML="";
+  $("#finaleIntro").hidden=false; $("#lightBtn").hidden=false; $("#finaleEnd").hidden=true;
+  $("#finaleWish").textContent=`「${state.wish}」`;
+  const photo=state.shots[0] ? await loadImage(state.shots[0]).catch(()=>null) : null;
+  await Promise.allSettled([document.fonts.load(`700 80px 'LXGW WenKai TC'`,state.wish+state.scene.title+"福平安健康團圓壽好運如意發財")]);
+  state.lantern3d=!!window.LanternSky?.open({wish:lanternWish(),photo,title:state.scene.title});
+}
+
+// 天燈寫得下的長度
+function lanternWish(){
+  const chars=[...state.wish];
+  return chars.length>150 ? chars.slice(0,150).join("")+"…" : state.wish;
+}
+
+function lightLantern(){
+  $("#lightBtn").hidden=true; $("#finaleIntro").hidden=true;
+  const done=()=>{ $("#finaleEnd").hidden=false; };
+  if(state.lantern3d) window.LanternSky.ignite(done);
+  else{ releaseFallbackLanterns(); done(); }
+}
+
+// 3D 開不起來的裝置，退回平面的天燈
+function releaseFallbackLanterns(){
+  const sky=$("#lanternSky"); sky.querySelectorAll(".lantern").forEach(item=>item.remove());
   for(let i=0;i<18;i++){
     const lantern=document.createElement("i"); lantern.className="lantern";
     lantern.style.left=`${5+Math.random()*90}%`;

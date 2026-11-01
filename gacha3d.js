@@ -12,6 +12,7 @@ const CHUTE = new THREE.Vector3(0,.66,.8);
 const TRAY = new THREE.Vector3(0,.52,1.5);
 const clamp = (v,a=0,b=1) => Math.min(b,Math.max(a,v));
 const ease = t => t*t*(3-2*t);
+const smoother = t => t*t*t*(t*(t*6-15)+10);
 const span = (t,a,b) => clamp((t-a)/(b-a));
 
 function textPlane(w,h,draw,opts={}){
@@ -109,7 +110,7 @@ class Machine {
       c.fillStyle="#f1e3c6"; c.fillRect(0,0,W,H);
       c.strokeStyle="#3a2a1c"; c.lineWidth=8; c.strokeRect(9,9,W-18,H-18);
       c.fillStyle="#a8281f"; c.font="700 88px 'Noto Serif TC', serif"; c.textAlign="center"; c.textBaseline="middle";
-      c.fillText("願 望 扭 蛋",W/2,H/2+5);
+      c.fillText("轉 來 坐",W/2,H/2+5);
     });
     sign.position.set(0,2.28,1.158); m.add(sign);
     const price = textPlane(.34,1.08,(c,W,H)=>{
@@ -228,8 +229,20 @@ class Machine {
       if(Math.abs(dx)>6) moved=true;
       this.yawTarget = clamp(startYaw+dx*.008,-.75,.75);
     });
-    el.addEventListener("pointerup",()=>{ if(down!==null && !moved) document.getElementById("spinBtn").click(); down=null; });
+    el.addEventListener("pointerup",e=>{ if(down!==null && !moved && this.hitMachine(e)) document.getElementById("spinBtn").click(); down=null; });
     el.addEventListener("pointercancel",()=>{ down=null; });
+  }
+
+  // 畫布鋪滿整頁，只有點到機台才算
+  hitMachine(e){
+    const box=this.renderer.domElement.getBoundingClientRect();
+    const ray=new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2((e.clientX-box.left)/box.width*2-1,1-(e.clientY-box.top)/box.height*2),this.camera);
+    return ray.intersectObject(this.rig,true).length>0;
+  }
+
+  homePose(){
+    return this.homeCam.clone().sub(this.homeLook).multiplyScalar(this.fit||1).add(this.homeLook);
   }
 
   resize(){
@@ -238,7 +251,7 @@ class Machine {
     this.renderer.setSize(w,h);
     this.camera.aspect = w/h;
     // 窄畫面把鏡頭拉遠，機台才不會被切掉
-    this.fit = Math.max(1,.62/this.camera.aspect);
+    this.fit = Math.max(1,.66/this.camera.aspect);
     this.camera.updateProjectionMatrix();
   }
 
@@ -248,6 +261,10 @@ class Machine {
       this.note = this.makeNote(title); this.note.visible=false; this.rig.add(this.note);
       this.timeline = {t:0,picked,resolve,stage:{},from:null};
       this.yawTarget = 0;
+      // 鏡頭走一條連續的曲線：轉把手時就開始慢慢靠近，中途不停、不急轉
+      const home=this.homePose(), near=new THREE.Vector3(0,1.55,7.4);
+      this.camPath=new THREE.CatmullRomCurve3([home,home.clone().lerp(near,.3).add(new THREE.Vector3(-1.1,.1,0)),home.clone().lerp(near,.68).add(new THREE.Vector3(.7,-.5,0)),near]);
+      this.lookPath=new THREE.CatmullRomCurve3([this.homeLook.clone(),new THREE.Vector3(0,2.5,.3),new THREE.Vector3(0,1.5,1.2),new THREE.Vector3(0,1.46,2.5)]);
     });
   }
 
@@ -265,7 +282,7 @@ class Machine {
 
   once(key,fn){ const s=this.timeline.stage; if(!s[key]){ s[key]=true; fn(); } }
 
-  // 劇本：0 投幣 → .5 轉把手 → 2.5 掉進出口 → 3.1 滾到接球盤 → 3.9 拿起來 → 4.7 打開 → 5.9 結束
+  // 劇本：0 投幣 → .5 轉把手 → 2.5 掉進出口 → 3.1 滾到接球盤 → 4 拿起來 → 5.1 打開 → 6.7 結束
   runTimeline(dt){
     const T=this.timeline; T.t+=dt; const t=T.t, cap=T.picked;
     if(t<.55){
@@ -295,26 +312,25 @@ class Machine {
       cap.mesh.position.y += Math.abs(Math.sin(k*Math.PI*3))*(1-k)*.16;
       cap.mesh.rotation.x += dt*9*(1-k);
     }
-    if(t>=3.9){
-      // 鏡頭推近，扭蛋拿到眼前
-      const k=ease(span(t,3.9,4.6));
-      const near=new THREE.Vector3(0,1.5,7.4);
-      this.camTarget=near; this.lookTarget=new THREE.Vector3(0,1.46,1.6);
-      cap.mesh.position.lerpVectors(TRAY,new THREE.Vector3(0,1.46,2.5),k);
-      cap.mesh.quaternion.slerp(new THREE.Quaternion(),.14);
+    if(t>=4){
+      const k=smoother(span(t,4,5.05));
+      const to=new THREE.Vector3(0,1.46,2.5);
+      cap.mesh.position.lerpVectors(TRAY,to,k);
+      cap.mesh.position.y+=Math.sin(k*Math.PI)*.18;
+      cap.mesh.quaternion.slerp(new THREE.Quaternion(),.1);
     }
-    if(t>=4.7){
+    if(t>=5.1){
       this.once("pop",()=>window.RetroSfx?.pop());
-      const k=ease(span(t,4.7,5.15));
+      const k=smoother(span(t,5.1,5.7));
       cap.mesh.userData.a.position.y=k*.46; cap.mesh.userData.a.rotation.x=-k*.4;
       cap.mesh.userData.b.position.y=-k*.46; cap.mesh.userData.b.rotation.x=Math.PI+k*.4;
-      this.flash.position.set(0,1.46,2.9); this.flash.intensity=Math.sin(span(t,4.7,5.6)*Math.PI)*40;
+      this.flash.position.set(0,1.46,2.9); this.flash.intensity=Math.sin(span(t,5.1,6.6)*Math.PI)*34;
       this.note.visible=true;
       this.note.position.set(0,1.46,2.55);
       this.note.scale.setScalar(.12+k*.5);
       this.note.rotation.set(0,0,0);
     }
-    if(t>=5.9){ this.timeline=null; T.resolve(); this.recycle(cap); }
+    if(t>=6.7){ this.timeline=null; T.resolve(); this.recycle(cap); }
   }
 
   // 用過的扭蛋放回球裡，鏡頭歸位
@@ -324,7 +340,9 @@ class Machine {
       ud.a.position.y=0; ud.a.rotation.x=0; ud.b.position.y=0; ud.b.rotation.x=Math.PI;
       cap.p.set(0,5,0); cap.prev.copy(cap.p); cap.mesh.visible=true; cap.live=true;
       this.rig.remove(this.note); this.flash.intensity=0;
-      this.camTarget=null; this.lookTarget=null; this.yawTarget=-.2; this.settle=2;
+      this.camPath=null; this.yawTarget=-.2; this.settle=2;
+      // 回來時畫面已換過，直接歸位，不要看到鏡頭飛回去
+      this.camera.position.copy(this.homePose()); this.look.copy(this.homeLook);
     };
   }
 
@@ -346,11 +364,16 @@ class Machine {
     }
     this.idle+=dt;
     this.yaw+=(this.yawTarget-this.yaw)*.08;
-    this.rig.rotation.y=this.yaw+(this.timeline?0:Math.sin(this.idle*.5)*.05);
-    const cam=this.camTarget||this.homeCam, look=this.lookTarget||this.homeLook;
-    const goal=this.camTarget?cam:cam.clone().sub(this.homeLook).multiplyScalar(this.fit||1).add(this.homeLook);
-    this.camera.position.lerp(goal,.09);
-    this.look.lerp(look,.09);
+    this.sway=(this.sway??1)+((this.timeline?0:1)-(this.sway??1))*.05;
+    this.rig.rotation.y=this.yaw+Math.sin(this.idle*.5)*.05*this.sway;
+    if(this.camPath && this.timeline){
+      const u=smoother(span(this.timeline.t,.35,5.3));
+      this.camPath.getPoint(u,this.camera.position);
+      this.lookPath.getPoint(u,this.look);
+    }else if(!this.camPath){
+      this.camera.position.lerp(this.homePose(),.09);
+      this.look.lerp(this.homeLook,.09);
+    }
     this.camera.lookAt(this.look);
   }
 

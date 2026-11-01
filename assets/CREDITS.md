@@ -18,5 +18,13 @@
 | taiwan-lvchuan.jpg | Rukawa River of Taichu.jpg | 日治時期明信片 |
 | taiwan-longshan.jpg | 1920 to 1929 the Liông-san Temple in Taihoku.jpg | 1920 年代 |
 | taiwan-guanziling.jpg | Kanshirei Hotspring.jpg | 日治時期明信片 |
+| taiwan-mtali.jpg | Mt.Ali postcard.jpg | 日治時期明信片 |
+| taiwan-yushan.jpg | 150. Distant View of Mt. Niitaka from Mt. Ari. Formosa..JPG | 日治時期明信片 |
+| taiwan-xiziwan.jpg | Seishiwan, Takao.jpg | 日治時期明信片 |
+| taiwan-cijin.jpg | The Hatago Seaside Resort of Takao, Formosa.png | 日治時期明信片 |
+| taiwan-yancheng.jpg | Takao Ginza.jpg | 日治時期明信片 |
+| taiwan-fengshan.jpg | 鳳山街01.jpg | 日治時期明信片 |
+| taiwan-shimen.jpg | Scene of Sekimon in Heito, Formosa.jpg | 日治時期明信片 |
+| taiwan-jiaoban.jpg | Pushcar Railway Kappanzan Taiwan.jpg | 日治時期明信片 |
 
 照片經裁切與舊照色調處理。去背模型 selfie_segmenter.tflite 來自 Google MediaPipe。
