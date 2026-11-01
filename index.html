@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>三步驟天燈</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.11/lib/p5.min.js"></script>
+
+  <style>
+    html, body { margin:0; padding:0; background:#050814; overflow:hidden; }
+    canvas { display:block; }
+
+    /* 不能用語音時的打字輸入框 */
+    #wishInputBox {
+      position:fixed; inset:0; display:none;
+      align-items:center; justify-content:center;
+      background:rgba(5,8,20,0.6); z-index:10;
+    }
+    #wishInputBox .card {
+      width:min(560px, calc(100vw - 32px)); box-sizing:border-box;
+      background:#141a36; border:2px solid rgba(255,220,140,0.6);
+      border-radius:18px; padding:20px; color:#fff;
+      font-family:system-ui, "Microsoft JhengHei", sans-serif;
+    }
+    #wishInputBox h2 { margin:0 0 12px; font-size:24px; }
+    #wishInput {
+      width:100%; box-sizing:border-box; min-height:110px;
+      font-size:20px; padding:10px; border-radius:10px; border:none; resize:vertical;
+    }
+    #wishInputBox .row { display:flex; gap:12px; margin-top:14px; justify-content:flex-end; }
+    #wishInputBox button {
+      font-size:20px; padding:10px 22px; border-radius:14px; border:none; cursor:pointer;
+      background:#ffd75a; color:#231428;
+    }
+    #wishInputBox button.ghost { background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.5); }
+  </style>
+</head>
+<body>
+  <div id="wishInputBox">
+    <div class="card">
+      <h2>寫下你的願望</h2>
+      <textarea id="wishInput" placeholder="沒抓到聲音，請打字；手機可以按鍵盤上的麥克風用說的"></textarea>
+      <div class="row">
+        <button class="ghost" onclick="cancelWishInput()">取消</button>
+        <button onclick="submitWishInput()">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 相機不能用時：手機會直接開前鏡頭，電腦會選照片檔 -->
+  <input id="photoInput" type="file" accept="image/*" capture="user" style="display:none" />
+
+  <script src="sketch.js"></script>
+</body>
+</html>
