@@ -435,6 +435,7 @@ try{
   const machine = new Machine(wrap);
   wrap.classList.add("has3d");
   window.Gacha3D = machine;
+  window.renderGachaAction?.();
 }catch(error){
   console.warn("3D 扭蛋機無法啟動，改用平面版",error);
 }
