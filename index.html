@@ -1,65 +1,58 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#11152f" />
-  <meta name="description" content="抽出願望場景、拍攝三連拍，掃描 QR Code 帶走專屬願望拍貼。" />
-  <title>願望扭蛋拍貼機</title>
-
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.11/lib/p5.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@gh-pages/qrcode.min.js"></script>
-
-  <style>
-    html, body { margin:0; padding:0; background:#050814; overflow:hidden; }
-    body::before {
-      content:""; position:fixed; inset:0; pointer-events:none; z-index:2;
-      box-shadow:inset 0 0 110px rgba(0,0,0,.48), inset 0 -45px 90px rgba(5,8,20,.28);
-      background:linear-gradient(115deg,rgba(255,255,255,.025),transparent 28%,transparent 72%,rgba(255,213,130,.025));
-      mix-blend-mode:screen;
-    }
-    canvas { display:block; filter:saturate(1.13) contrast(1.035); }
-
-    /* 不能用語音時的打字輸入框 */
-    #wishInputBox {
-      position:fixed; inset:0; display:none;
-      align-items:center; justify-content:center;
-      background:rgba(5,8,20,0.6); z-index:10;
-    }
-    #wishInputBox .card {
-      width:min(560px, calc(100vw - 32px)); box-sizing:border-box;
-      background:#141a36; border:2px solid rgba(255,220,140,0.6);
-      border-radius:18px; padding:20px; color:#fff;
-      font-family:system-ui, "Microsoft JhengHei", sans-serif;
-    }
-    #wishInputBox h2 { margin:0 0 12px; font-size:24px; }
-    #wishInput {
-      width:100%; box-sizing:border-box; min-height:110px;
-      font-size:20px; padding:10px; border-radius:10px; border:none; resize:vertical;
-    }
-    #wishInputBox .row { display:flex; gap:12px; margin-top:14px; justify-content:flex-end; }
-    #wishInputBox button {
-      font-size:20px; padding:10px 22px; border-radius:14px; border:none; cursor:pointer;
-      background:#ffd75a; color:#231428;
-    }
-    #wishInputBox button.ghost { background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.5); }
-    #qrStage { position:fixed; left:-9999px; top:-9999px; width:240px; height:240px; }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1b1831">
+  <meta name="description" content="抽出一個願望場景、拍下三連拍，掃描 QR Code 帶走今天的祝福。">
+  <title>願望製造所｜三連拍貼機</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="wishInputBox">
-    <div class="card">
-      <h2>寫下你的願望</h2>
-      <textarea id="wishInput" placeholder="沒抓到聲音，請打字；手機可以按鍵盤上的麥克風用說的"></textarea>
-      <div class="row">
-        <button class="ghost" onclick="cancelWishInput()">取消</button>
-        <button onclick="submitWishInput()">完成</button>
-      </div>
-    </div>
+  <div class="world" aria-hidden="true">
+    <div class="scene-layer scene-a"></div><div class="scene-layer scene-b"></div>
+    <div class="world-shade"></div><div class="ambient" id="ambient"></div>
   </div>
-
-  <div id="qrStage" aria-hidden="true"></div>
-
-  <script src="sketch.js"></script>
+  <header class="topbar">
+    <button class="brand" id="homeBtn" type="button" aria-label="回到首頁"><span class="brand-mark">✦</span><span><b>願望製造所</b><small>WISH PHOTO STUDIO</small></span></button>
+    <div class="progress" aria-label="體驗進度"><span class="is-active"></span><span></span><span></span><span></span></div>
+  </header>
+  <main id="app">
+    <section class="screen is-active hero" data-screen="gacha">
+      <div class="hero-copy"><p class="eyebrow">今日限定 · 三連拍體驗</p><h1>轉出一個世界，<br>把願望拍下來。</h1><p class="lede">五種場景，一組專屬祝福。照片可用 QR Code 帶走，24 小時後自動刪除。</p></div>
+      <div class="machine-wrap" id="machineWrap"><img class="machine" src="assets/gacha-machine.png" alt="珍珠色願望扭蛋機"><div class="machine-glow"></div><button class="crank" id="spinBtn" type="button" aria-label="轉動扭蛋機"><span class="crank-knob"></span></button><div class="capsule-pop" id="capsulePop"><i></i></div></div>
+      <button class="primary hero-action" id="spinAction" type="button"><span>轉出我的拍貼場景</span><b>↗</b></button><p class="microcopy">按一下開始 · 不需登入</p>
+    </section>
+    <section class="screen reveal" data-screen="reveal">
+      <div class="reveal-orb"><span id="sceneIcon">☀</span></div><p class="eyebrow">你的場景已出現</p><h2 id="sceneTitle">晨光花園</h2><p class="scene-poem" id="scenePoem">今天的光，會替你把答案照亮。</p>
+      <div class="action-row"><button class="secondary" id="rerollBtn" type="button">再轉一次</button><button class="primary" id="wishBtn" type="button">帶著願望進場 <b>→</b></button></div>
+    </section>
+    <section class="screen wish" data-screen="wish">
+      <p class="eyebrow">STEP 02 · 留下一句話</p><h2>你想把什麼願望，<br>留在今天的照片裡？</h2><p class="lede">按一下麥克風說話，或直接打字。語音無法使用時會自動切換成文字輸入。</p>
+      <button class="mic" id="micBtn" type="button" aria-label="開始語音輸入"><span class="mic-ring"></span><span class="mic-icon">⌁</span></button><p class="mic-status" id="micStatus">輕觸開始說話</p><button class="text-link" id="typeBtn" type="button">我想用打字的</button>
+      <div class="wish-preview" id="wishPreview" hidden><p id="wishText"></p><button class="primary" id="toCameraBtn" type="button">帶著這句話去拍照 <b>→</b></button></div>
+    </section>
+    <section class="screen camera" data-screen="camera">
+      <div class="camera-head"><div><p class="eyebrow">STEP 03 · 三連拍</p><h2>準備好了就看鏡頭</h2></div><p><b id="shotCount">0</b> / 3</p></div>
+      <div class="camera-stage" id="cameraStage"><video id="cameraVideo" autoplay muted playsinline></video><div class="camera-placeholder" id="cameraPlaceholder"><span>相機預覽會出現在這裡</span></div><div class="photo-guide"><span></span><span></span><span></span><span></span></div><div class="countdown" id="countdown"></div><div class="flash" id="flash"></div></div>
+      <div class="frame-picker" aria-label="拍貼相框"><span>選框</span><button class="frame-chip is-active" data-frame="pearl" type="button"><i class="pearl"></i>珍珠</button><button class="frame-chip" data-frame="coral" type="button"><i class="coral"></i>珊瑚</button><button class="frame-chip" data-frame="night" type="button"><i class="night"></i>星夜</button></div>
+      <div class="shots" id="shots"><span></span><span></span><span></span></div><button class="primary shutter" id="startShotsBtn" type="button"><span class="shutter-dot"></span>開始三連拍</button><p class="camera-note" id="cameraNote">會倒數 3 秒，連拍三張</p>
+    </section>
+    <section class="screen review" data-screen="review">
+      <div class="strip-shell"><img id="collagePreview" alt="你的三連拍願望拍貼"></div>
+      <div class="review-copy"><p class="eyebrow">YOUR WISH STRIP</p><h2>今天的願望，<br>已經被好好留下。</h2><div class="blessing"><span>✦ 給你的祝福</span><p id="blessingText">正在替你準備一句祝福…</p></div><div class="action-row"><button class="secondary" id="retakeBtn" type="button">重新拍</button><button class="primary" id="saveBtn" type="button">產生帶走 QR Code <b>→</b></button></div></div>
+    </section>
+    <section class="screen pickup" data-screen="pickup">
+      <div class="pickup-visual"><img id="pickupPreview" alt="願望拍貼預覽"></div>
+      <div class="pickup-copy"><p class="eyebrow">READY TO TAKE HOME</p><h2>掃一下，<br>把今天帶回家。</h2><div class="qr-wrap" id="qrMount"><div class="qr-loading">正在製作 QR Code…</div></div><p class="expiry">照片連結將在 24 小時後自動刪除</p><div class="action-row"><button class="secondary" id="downloadBtn" type="button">這台裝置直接下載</button><button class="primary" id="finishBtn" type="button">完成並放飛願望 <b>✦</b></button></div></div>
+    </section>
+    <section class="screen finale" data-screen="finale"><div class="lantern-sky" id="lanternSky"></div><p class="eyebrow">WISH SENT</p><h2>願望已經出發。</h2><p class="scene-poem">帶著剛才那一刻，慢慢往想去的地方走。</p><button class="primary" id="againBtn" type="button">再拍一組</button></section>
+  </main>
+  <dialog id="wishDialog"><form method="dialog" class="dialog-card" id="wishForm"><button class="dialog-close" value="cancel" aria-label="關閉">×</button><p class="eyebrow">WRITE IT DOWN</p><h2>寫下你的願望</h2><textarea id="wishInput" maxlength="160" placeholder="例如：希望今年可以更勇敢地做自己。"></textarea><div class="dialog-foot"><span id="charCount">0 / 160</span><button class="primary" id="submitWishBtn" value="default">收下這個願望</button></div></form></dialog>
+  <canvas id="captureCanvas" hidden></canvas><div id="qrStage" aria-hidden="true"></div><div class="toast" id="toast" role="status"></div>
+  <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@gh-pages/qrcode.min.js"></script><script src="app.js"></script>
 </body>
 </html>
