@@ -1317,7 +1317,8 @@ function drawSavedPickupScreen(yTop) {
   hud.fill(208, 214, 239);
   hud.textAlign(CENTER, TOP);
   hud.textSize(18);
-  hud.text("掃碼後可直接儲存照片", qrX + 126, qrY + 318);
+  hud.textLeading(25);
+  hud.text("掃碼後可直接儲存照片\n24 小時後自動刪除", qrX + 126, qrY + 312);
 }
 
 async function preparePhotoPickup(img) {

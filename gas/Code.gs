@@ -4,6 +4,7 @@
 const API_URL = "https://eow1fla8fgzbk23.m.pipedream.net";
 const PHOTO_FOLDER_NAME = "願望拍貼機-QR照片";
 const PHOTO_KEY_PREFIX = "WISH_PHOTO_";
+const PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
 
 function doGet(e) {
   const token = String((e && e.parameter && e.parameter.photo) || "").trim();
@@ -41,20 +42,37 @@ function savePhoto_(body) {
   const blob = Utilities.newBlob(bytes, mimeType, `wish-photo-${token}.${extension}`);
   const folder = getPhotoFolder_();
   const file = folder.createFile(blob);
+  const expiresAt = Date.now() + PHOTO_TTL_MS;
 
   // 檔案維持私人；公開網頁只會透過不可猜測的 token 讀取。
-  PropertiesService.getScriptProperties().setProperty(PHOTO_KEY_PREFIX + token, file.getId());
+  PropertiesService.getScriptProperties().setProperty(PHOTO_KEY_PREFIX + token, JSON.stringify({
+    fileId: file.getId(),
+    expiresAt: expiresAt
+  }));
+  ensurePhotoCleanupTrigger_();
   const claimUrl = `${ScriptApp.getService().getUrl()}?photo=${encodeURIComponent(token)}`;
-  return { ok: true, claimUrl: claimUrl, token: token };
+  return { ok: true, claimUrl: claimUrl, token: token, expiresAt: new Date(expiresAt).toISOString() };
 }
 
 function renderPhotoPickupPage_(token) {
   if (!/^[a-f0-9]{32}$/i.test(token)) return pickupErrorPage_("領取碼格式錯誤");
-  const fileId = PropertiesService.getScriptProperties().getProperty(PHOTO_KEY_PREFIX + token);
-  if (!fileId) return pickupErrorPage_("找不到這張拍貼，請重新產生 QR Code");
+  const rawRecord = PropertiesService.getScriptProperties().getProperty(PHOTO_KEY_PREFIX + token);
+  if (!rawRecord) return pickupErrorPage_("找不到這張拍貼，請重新產生 QR Code");
+
+  let record;
+  try {
+    record = JSON.parse(rawRecord);
+  } catch (err) {
+    record = { fileId: rawRecord, expiresAt: 0 };
+  }
+  if (!record.fileId) return pickupErrorPage_("找不到這張拍貼");
+  if (record.expiresAt && Date.now() >= Number(record.expiresAt)) {
+    deletePhotoRecord_(token, record.fileId);
+    return pickupErrorPage_("這張拍貼已超過 24 小時並自動刪除");
+  }
 
   try {
-    const blob = DriveApp.getFileById(fileId).getBlob();
+    const blob = DriveApp.getFileById(record.fileId).getBlob();
     const mimeType = String(blob.getContentType() || "image/jpeg");
     const dataUrl = `data:${mimeType};base64,${Utilities.base64Encode(blob.getBytes())}`;
     const html = `<!doctype html>
@@ -73,7 +91,7 @@ function renderPhotoPickupPage_(token) {
         <h1>你的願望拍貼 ✦</h1><p class="sub">長按照片或按下按鈕即可儲存</p>
         <img class="photo" src="${dataUrl}" alt="願望拍貼">
         <a href="${dataUrl}" download="wish-photo.${mimeType.indexOf("png") >= 0 ? "png" : "jpg"}">下載拍貼</a>
-        <small>照片儲存在活動主辦人的私人雲端空間</small>
+        <small>照片儲存在活動主辦人的私人雲端空間，24 小時後自動刪除</small>
       </main></body></html>`;
     return HtmlService.createHtmlOutput(html).setTitle("領取願望拍貼");
   } catch (err) {
@@ -98,6 +116,34 @@ function getPhotoFolder_() {
   const folder = DriveApp.createFolder(PHOTO_FOLDER_NAME);
   props.setProperty("PHOTO_FOLDER_ID", folder.getId());
   return folder;
+}
+
+function ensurePhotoCleanupTrigger_() {
+  const exists = ScriptApp.getProjectTriggers().some(function(trigger) {
+    return trigger.getHandlerFunction() === "cleanupExpiredPhotos";
+  });
+  if (!exists) {
+    ScriptApp.newTrigger("cleanupExpiredPhotos").timeBased().everyHours(1).create();
+  }
+}
+
+function cleanupExpiredPhotos() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  const now = Date.now();
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf(PHOTO_KEY_PREFIX) !== 0) return;
+    let record;
+    try { record = JSON.parse(all[key]); } catch (err) { return; }
+    if (!record.expiresAt || now < Number(record.expiresAt)) return;
+    const token = key.substring(PHOTO_KEY_PREFIX.length);
+    deletePhotoRecord_(token, record.fileId);
+  });
+}
+
+function deletePhotoRecord_(token, fileId) {
+  try { DriveApp.getFileById(fileId).setTrashed(true); } catch (err) {}
+  PropertiesService.getScriptProperties().deleteProperty(PHOTO_KEY_PREFIX + token);
 }
 
 function jsonOut_(obj) {
