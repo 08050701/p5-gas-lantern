@@ -2,7 +2,7 @@
 // OPENAI / 其他服務的金鑰不要寫在這個檔案，請放在「指令碼屬性」。
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+const DEFAULT_OPENAI_MODEL = "gpt-6-luna";
 const PHOTO_FOLDER_NAME = "願望拍貼機-QR照片";
 const PHOTO_KEY_PREFIX = "WISH_PHOTO_";
 const PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
