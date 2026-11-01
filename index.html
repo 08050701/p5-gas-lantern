@@ -33,12 +33,12 @@
     <section class="screen wish" data-screen="wish">
       <p class="eyebrow">STEP 02 · 留下一句話</p><h2>你想把什麼願望，<br>留在今天的照片裡？</h2><p class="lede">按一下麥克風說話，或直接打字。語音無法使用時會自動切換成文字輸入。</p>
       <button class="mic" id="micBtn" type="button" aria-label="開始語音輸入"><span class="mic-ring"></span><span class="mic-icon">⌁</span></button><p class="mic-status" id="micStatus">輕觸開始說話</p><button class="text-link" id="typeBtn" type="button">我想用打字的</button>
-      <div class="wish-preview" id="wishPreview" hidden><p id="wishText"></p><button class="primary" id="toCameraBtn" type="button">帶著這句話去拍照 <b>→</b></button></div>
+      <div class="wish-preview" id="wishPreview" hidden><p id="wishText"></p><div class="inline-blessing"><span>AI 正在回應你的願望</span><p id="inlineBlessing">正在寫一段只給你的祝福…</p></div><button class="primary" id="toCameraBtn" type="button">帶著這句話去拍照 <b>→</b></button></div>
     </section>
     <section class="screen camera" data-screen="camera">
       <div class="camera-head"><div><p class="eyebrow">STEP 03 · 三連拍</p><h2>準備好了就看鏡頭</h2></div><p><b id="shotCount">0</b> / 3</p></div>
-      <div class="camera-stage" id="cameraStage"><video id="cameraVideo" autoplay muted playsinline></video><div class="camera-placeholder" id="cameraPlaceholder"><span>相機預覽會出現在這裡</span></div><div class="photo-guide"><span></span><span></span><span></span><span></span></div><div class="countdown" id="countdown"></div><div class="flash" id="flash"></div></div>
-      <div class="frame-picker" aria-label="拍貼相框"><span>選框</span><button class="frame-chip is-active" data-frame="pearl" type="button"><i class="pearl"></i>珍珠</button><button class="frame-chip" data-frame="coral" type="button"><i class="coral"></i>珊瑚</button><button class="frame-chip" data-frame="night" type="button"><i class="night"></i>星夜</button></div>
+      <div class="camera-stage" id="cameraStage" data-frame="arch"><video id="cameraVideo" autoplay muted playsinline></video><div class="camera-placeholder" id="cameraPlaceholder"><span>相機預覽會出現在這裡</span></div><div class="photo-guide"><span></span><span></span><span></span><span></span></div><div class="countdown" id="countdown"></div><div class="flash" id="flash"></div></div>
+      <div class="frame-picker" aria-label="拍貼紙造型"><span>選拍貼紙造型</span><button class="frame-chip is-active" data-frame="arch" type="button"><i class="arch"></i>晨光拱門</button><button class="frame-chip" data-frame="petal" type="button"><i class="petal"></i>花瓣撕紙</button><button class="frame-chip" data-frame="film" type="button"><i class="film"></i>星夜底片</button></div>
       <div class="shots" id="shots"><span></span><span></span><span></span></div><button class="primary shutter" id="startShotsBtn" type="button"><span class="shutter-dot"></span>開始三連拍</button><p class="camera-note" id="cameraNote">會倒數 3 秒，連拍三張</p>
     </section>
     <section class="screen review" data-screen="review">

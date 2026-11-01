@@ -9,12 +9,12 @@ const SCENES = [
   { key:"beach", title:"暮色海邊", icon:"≈", image:"assets/scene-beach.jpg", poem:"浪會帶走猶豫，也把新的勇氣送回來。" }
 ];
 const FRAME_STYLES = {
-  pearl:{ background:"#fff8ed", ink:"#6e4050", accent:"#e4ba75", name:"PEARL WISH" },
-  coral:{ background:"#ee756b", ink:"#fffaf0", accent:"#ffd6ae", name:"CORAL WISH" },
-  night:{ background:"#202044", ink:"#fff7e8", accent:"#d9b5ff", name:"STARRY WISH" }
+  arch:{ background:"#fff8ed", ink:"#6e4050", accent:"#e4ba75", name:"MORNING ARCH", shape:"arch" },
+  petal:{ background:"#ef756c", ink:"#fffaf0", accent:"#ffd8b3", name:"PETAL PAPER", shape:"petal" },
+  film:{ background:"#202044", ink:"#fff7e8", accent:"#d9b5ff", name:"NIGHT FILM", shape:"film" }
 };
 
-const state = { screen:"gacha", scene:SCENES[0], wish:"", frame:"pearl", shots:[], collage:"", blessing:"", stream:null, listening:false, busy:false, bgFront:"a" };
+const state = { screen:"gacha", scene:SCENES[0], wish:"", frame:"arch", shots:[], collage:"", blessing:"", blessingPromise:null, stream:null, listening:false, busy:false, bgFront:"a" };
 const $ = (selector, root=document) => root.querySelector(selector);
 const $$ = (selector, root=document) => [...root.querySelectorAll(selector)];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -36,7 +36,7 @@ function init(){
 function bindEvents(){
   $("#spinBtn").addEventListener("click", spinGacha);
   $("#spinAction").addEventListener("click", spinGacha);
-  $("#rerollBtn").addEventListener("click", spinGacha);
+  $("#rerollBtn").addEventListener("click", rerollGacha);
   $("#wishBtn").addEventListener("click", () => showScreen("wish"));
   $("#typeBtn").addEventListener("click", openWishDialog);
   $("#micBtn").addEventListener("click", startSpeech);
@@ -109,6 +109,13 @@ async function spinGacha(){
   state.busy = false;
 }
 
+async function rerollGacha(){
+  if(state.busy) return;
+  showScreen("gacha");
+  await sleep(420);
+  spinGacha();
+}
+
 function openWishDialog(){
   const dialog = $("#wishDialog");
   $("#wishInput").value = state.wish;
@@ -135,8 +142,10 @@ function acceptWish(wish){
   state.wish = wish.slice(0,160);
   $("#wishText").textContent = `「${state.wish}」`;
   $("#wishPreview").hidden = false;
+  $("#micBtn").hidden = true;
+  $("#typeBtn").hidden = true;
   $("#micStatus").textContent = "已經好好收下你的願望";
-  requestBlessing();
+  state.blessingPromise = requestBlessing();
 }
 
 function startSpeech(){
@@ -180,15 +189,24 @@ function finishListening(){
 async function requestBlessing(){
   state.blessing = "";
   $("#blessingText").textContent = "正在替你準備一句祝福…";
+  $("#inlineBlessing").textContent = "正在寫一段只給你的祝福…";
+  $(".inline-blessing span").textContent = "AI 正在回應你的願望";
   try{
-    const response = await fetch(GAS_URL,{method:"POST",body:JSON.stringify({wish:state.wish})});
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    const response = await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"bless",wish:state.wish}),signal:controller.signal});
+    clearTimeout(timer);
     const data = await response.json();
     if(!data.ok) throw new Error(data.error || "祝福暫時沒有送達");
     state.blessing = String(data.reply || "願你慢慢靠近心裡真正想去的地方。").trim();
-  }catch(_){
+    $(".inline-blessing span").textContent = "✦ AI 給你的祝福";
+  }catch(error){
     state.blessing = "願你帶著今天的勇氣，慢慢靠近心裡真正想去的地方。";
+    $(".inline-blessing span").textContent = "✦ 先送你一句祝福";
   }
   $("#blessingText").textContent = state.blessing;
+  $("#inlineBlessing").textContent = state.blessing;
+  return state.blessing;
 }
 
 async function enterCamera(){
@@ -282,24 +300,31 @@ function renderShotSlots(){
 async function buildCollage(){
   canvas.width = 900; canvas.height = 1500;
   const style = FRAME_STYLES[state.frame];
+  const [sceneImage,...images] = await Promise.all([loadImage(state.scene.image),...state.shots.map(loadImage)]);
+  drawImageCover(ctx,sceneImage,0,0,900,1500);
+  ctx.globalAlpha = state.frame === "film" ? .82 : (state.frame === "petal" ? .68 : .72);
   ctx.fillStyle = style.background; ctx.fillRect(0,0,900,1500);
-  ctx.fillStyle = style.accent; ctx.fillRect(0,0,900,16);
-  const images = await Promise.all(state.shots.map(loadImage));
-  images.forEach((img,index) => drawCover(img,54,90+index*390,792,350));
+  ctx.globalAlpha = 1;
+  drawScenePaperDetails(style);
+  ctx.fillStyle = style.ink;
+  ctx.textAlign = "left";
+  ctx.font = "800 24px 'Noto Sans TC', sans-serif";
+  ctx.fillText(`${state.scene.icon}  ${state.scene.title} · WISH PHOTO`,54,62);
+  images.forEach((img,index) => drawStyledPhoto(img,54,105+index*375,792,330,style,index));
   ctx.fillStyle = style.ink;
   ctx.textAlign = "left";
   ctx.font = "700 31px 'Noto Sans TC', sans-serif";
-  ctx.fillText(style.name,54,1300);
+  ctx.fillText(style.name,54,1265);
   ctx.textAlign = "right";
   ctx.font = "600 27px 'Noto Sans TC', sans-serif";
-  ctx.fillText(state.scene.title,846,1300);
+  ctx.fillText("三格願望寫真",846,1265);
   ctx.textAlign = "left";
   ctx.font = "600 25px 'Noto Serif TC', serif";
-  drawWrappedText(`「${state.wish}」`,54,1352,792,38,3,style.ink);
+  drawWrappedText(`「${state.wish}」`,54,1320,792,38,3,style.ink);
   ctx.textAlign = "right";
   ctx.font = "500 17px 'Noto Sans TC', sans-serif";
   ctx.fillText(formatDate(new Date()),846,1460);
-  drawSparkle(ctx,807,54,style.accent);
+  drawSparkle(ctx,820,58,style.accent);
   return canvas.toDataURL("image/jpeg",.9);
 }
 
@@ -307,11 +332,70 @@ function loadImage(src){
   return new Promise((resolve,reject) => { const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src; });
 }
 
-function drawCover(img,x,y,w,h){
+function drawImageCover(context,img,x,y,w,h){
   const ratio=Math.max(w/img.width,h/img.height); const sw=w/ratio; const sh=h/ratio;
+  context.drawImage(img,(img.width-sw)/2,(img.height-sh)/2,sw,sh,x,y,w,h);
+}
+
+function drawStyledPhoto(img,x,y,w,h,style,index){
   ctx.save();
-  roundedRect(ctx,x,y,w,h,22); ctx.clip();
-  ctx.drawImage(img,(img.width-sw)/2,(img.height-sh)/2,sw,sh,x,y,w,h);
+  photoShapePath(ctx,x,y,w,h,style.shape,index);
+  ctx.clip();
+  drawImageCover(ctx,img,x,y,w,h);
+  ctx.restore();
+  ctx.save();
+  photoShapePath(ctx,x,y,w,h,style.shape,index);
+  ctx.strokeStyle = style.accent;
+  ctx.lineWidth = style.shape === "film" ? 8 : 5;
+  ctx.stroke();
+  if(style.shape === "film") drawFilmHoles(x,y,w,h,style.accent);
+  ctx.restore();
+}
+
+function photoShapePath(context,x,y,w,h,shape,index){
+  if(shape === "arch"){
+    const rise = h*.38;
+    context.beginPath(); context.moveTo(x,y+h); context.lineTo(x,y+rise);
+    context.bezierCurveTo(x,y-28,x+w,y-28,x+w,y+rise);
+    context.lineTo(x+w,y+h); context.closePath();
+    return;
+  }
+  if(shape === "petal"){
+    const flip = index%2 ? -1 : 1;
+    context.beginPath(); context.moveTo(x+44,y+6);
+    context.quadraticCurveTo(x+w*.5,y-18*flip,x+w-38,y+10);
+    context.quadraticCurveTo(x+w+18,y+h*.18,x+w-5,y+h*.36);
+    context.quadraticCurveTo(x+w+20,y+h*.58,x+w-8,y+h*.78);
+    context.quadraticCurveTo(x+w-8,y+h+15,x+w-48,y+h-5);
+    context.quadraticCurveTo(x+w*.5,y+h+18*flip,x+38,y+h-8);
+    context.quadraticCurveTo(x-18,y+h*.82,x+5,y+h*.62);
+    context.quadraticCurveTo(x-20,y+h*.38,x+6,y+h*.2);
+    context.quadraticCurveTo(x+4,y-10,x+44,y+6); context.closePath();
+    return;
+  }
+  roundedRect(context,x,y,w,h,14);
+}
+
+function drawFilmHoles(x,y,w,h,color){
+  ctx.fillStyle = color;
+  for(let px=x+34;px<x+w-20;px+=58){
+    roundedRect(ctx,px,y+12,28,10,3); ctx.fill();
+    roundedRect(ctx,px,y+h-22,28,10,3); ctx.fill();
+  }
+}
+
+function drawScenePaperDetails(style){
+  ctx.save();
+  ctx.globalAlpha = .16;
+  ctx.fillStyle = style.accent;
+  for(let i=0;i<11;i++){
+    const radius = 14+(i%4)*9;
+    ctx.beginPath(); ctx.arc((i*173)%940,(i*257)%1510,radius,0,Math.PI*2); ctx.fill();
+  }
+  ctx.translate(865,470); ctx.rotate(Math.PI/2);
+  ctx.font = "800 72px 'Noto Serif TC', serif";
+  ctx.textAlign = "center";
+  ctx.fillText(state.scene.title,0,0);
   ctx.restore();
 }
 
@@ -384,10 +468,12 @@ function showFinale(){
 
 function resetExperience(){
   stopCamera();
-  Object.assign(state,{screen:"gacha",scene:SCENES[0],wish:"",frame:"pearl",shots:[],collage:"",blessing:"",stream:null,listening:false,busy:false});
+  Object.assign(state,{screen:"gacha",scene:SCENES[0],wish:"",frame:"arch",shots:[],collage:"",blessing:"",blessingPromise:null,stream:null,listening:false,busy:false});
   $("#wishPreview").hidden=true; $("#wishText").textContent=""; $("#wishInput").value="";
+  $("#micBtn").hidden=false; $("#typeBtn").hidden=false; $("#micStatus").textContent="輕觸開始說話";
   $("#shotCount").textContent="0"; $("#blessingText").textContent="正在替你準備一句祝福…";
   $$(".frame-chip").forEach((chip,index)=>chip.classList.toggle("is-active",index===0));
+  $("#cameraStage").dataset.frame="arch";
   renderShotSlots(); setScene(SCENES[0]); showScreen("gacha");
 }
 
