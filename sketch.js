@@ -12,6 +12,9 @@ const SOUND_PIANO_URL = "https://assets.editor.p5js.org/68bfdd75e72d15a331e70880
 
 // --- 相機 ---
 let cam = null;
+let cameraStream = null;
+let cameraStarting = false;
+let cameraError = "";
 let selfieImg = null;
 
 // --- 語音辨識 ---
@@ -98,10 +101,6 @@ function setup() {
 
   hud = createGraphics(VW, VH);
   hud.pixelDensity(1);
-
-  cam = createCapture(VIDEO, () => {});
-  cam.size(640, 480);
-  cam.hide();
 
   initSpeechRecognition();
   initStars();
@@ -374,12 +373,17 @@ function hitTestButton(x, y) {
 function onButtonClick(id) {
   if (state === "selfie") {
     if (id === "takePhoto") {
-      // 相機被擋（Apps Script 的 iframe 常見）→ 改開手機相機 / 選照片
-      if (!camWorking()) { openPhotoPicker(); return; }
-      selfieImg = cam.get();
+      if (cameraStarting) return;
+      if (!camWorking()) { startCamera(); return; }
+      selfieImg = captureCameraFrame();
+      stopCamera();
       return;
     }
-    if (id === "photoRedo") { selfieImg = null; return; }
+    if (id === "photoRedo") {
+      selfieImg = null;
+      cameraError = "";
+      return;
+    }
     if (id === "photoNext") {
       if (!selfieImg) return;
       state = "final";
@@ -422,6 +426,7 @@ function onButtonClick(id) {
 }
 
 function resetToStart() {
+  stopCamera();
   state = "wish";
   selfieImg = null;
   liveWishText = "";
@@ -527,6 +532,9 @@ function drawHUD() {
   hud.text(`天燈數量：${lanterns.length}`, VW - 24, 20);
 
   const visible = getVisibleButtons();
+  if (buttons.takePhoto) {
+    buttons.takePhoto.label = cameraStarting ? "開啟中…" : (camWorking() ? "拍下照片" : "開啟相機");
+  }
   for (const id of visible) buttons[id].draw(hud, isButtonHot(id));
 
   const s = min(width / VW, height / VH);
@@ -556,7 +564,12 @@ function getTitleText() {
 
 function getSubtitleText() {
   if (state === "wish") return micHolding ? "放開就完成" : "按住錄音";
-  if (state === "selfie") return selfieImg ? "確認後按下一步" : "請按拍照";
+  if (state === "selfie") {
+    if (selfieImg) return "確認後按下一步";
+    if (cameraStarting) return "正在要求相機權限";
+    if (cameraError) return cameraError;
+    return camWorking() ? "相機已開啟，請按拍下照片" : "請先開啟相機";
+  }
   if (state === "final") return "按下儲存天燈";
   if (state === "saved") return "接下來要做什麼？";
   if (state === "release_fx") return "5 秒後升空";
@@ -584,33 +597,101 @@ function drawCameraScreen(yTop) {
     hud.image(selfieImg, x, y, screenW, screenH);
   } else {
     const ok = camWorking();
-    if (ok) hud.image(cam, x, y, screenW, screenH);
+    if (ok) {
+      // 自拍預覽左右鏡像，拍下來的照片也保持同一個方向。
+      const ctx = hud.drawingContext;
+      ctx.save();
+      ctx.translate(x + screenW, y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(cam, 0, 0, screenW, screenH);
+      ctx.restore();
+    }
     hud.fill(0, 0, 0, 90);
     hud.rect(x, y + screenH - 70, screenW, 70);
     hud.fill(255);
     hud.textAlign(CENTER, CENTER);
     hud.textSize(40);
-    hud.text(ok ? "臉放中間再拍照" : "按拍照開啟相機或選照片", VW / 2, y + screenH - 35);
+    const hint = ok
+      ? "臉放中間，再按拍下照片"
+      : (cameraStarting ? "相機開啟中…" : (cameraError || "按開啟相機開始預覽"));
+    hud.text(hint, VW / 2, y + screenH - 35);
   }
 }
 
 function camWorking() {
-  return !!(cam && cam.elt && cam.elt.videoWidth > 0);
+  return !!(cam && cam.videoWidth > 0 && cam.readyState >= 2);
 }
 
-// 用 <input type="file" capture> 開手機相機，iframe 裡也能用
-function openPhotoPicker() {
-  const input = document.getElementById("photoInput");
-  if (!input) return;
-  input.value = "";
-  input.onchange = () => {
-    const f = input.files && input.files[0];
-    if (!f) return;
-    const url = URL.createObjectURL(f);
-    loadImage(url, (img) => { selfieImg = img; URL.revokeObjectURL(url); });
-  };
-  input.click();
+async function startCamera() {
+  if (cameraStarting || camWorking()) return;
+  cameraStarting = true;
+  cameraError = "";
+
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("CAMERA_UNSUPPORTED");
+    }
+
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "user" } },
+      audio: false,
+    });
+
+    cam = document.createElement("video");
+    cam.autoplay = true;
+    cam.muted = true;
+    cam.playsInline = true;
+    cam.setAttribute("playsinline", "");
+    cam.srcObject = cameraStream;
+    cam.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;";
+    document.body.appendChild(cam);
+    await cam.play();
+  } catch (err) {
+    stopCamera();
+    if (err && (err.name === "NotAllowedError" || err.name === "SecurityError")) {
+      cameraError = "相機權限被拒絕，請在瀏覽器設定中允許";
+    } else if (err && err.name === "NotFoundError") {
+      cameraError = "找不到可用的相機";
+    } else if (err && err.message === "CAMERA_UNSUPPORTED") {
+      cameraError = "這個瀏覽器不支援即時相機";
+    } else {
+      cameraError = "相機無法啟動，請改用 Chrome 或 Safari";
+    }
+  } finally {
+    cameraStarting = false;
+  }
 }
+
+function captureCameraFrame() {
+  if (!camWorking()) return null;
+  const w = cam.videoWidth;
+  const h = cam.videoHeight;
+  const shot = createGraphics(w, h);
+  const ctx = shot.drawingContext;
+  ctx.save();
+  ctx.translate(w, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(cam, 0, 0, w, h);
+  ctx.restore();
+  const img = shot.get();
+  shot.remove();
+  return img;
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+  }
+  if (cam) {
+    cam.pause();
+    cam.srcObject = null;
+    cam.remove();
+    cam = null;
+  }
+}
+
+window.addEventListener("pagehide", stopCamera);
 
 function drawFinalPreview(yTop) {
   const cardW = 980;
