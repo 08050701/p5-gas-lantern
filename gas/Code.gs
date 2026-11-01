@@ -149,6 +149,13 @@ function cleanupExpiredPhotos() {
   });
 }
 
+// 部署管理員只需在 Apps Script 編輯器執行一次，完成 Drive 與觸發器授權。
+function setupPhotoStorage() {
+  getPhotoFolder_();
+  ensurePhotoCleanupTrigger_();
+  return true;
+}
+
 function deletePhotoRecord_(token, fileId) {
   try { DriveApp.getFileById(fileId).setTrashed(true); } catch (err) {}
   PropertiesService.getScriptProperties().deleteProperty(PHOTO_KEY_PREFIX + token);
