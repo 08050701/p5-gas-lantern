@@ -121,6 +121,7 @@ function showScreen(name){
   progressDots.forEach((dot,index) => dot.classList.toggle("is-active", index === step));
   if(name !== "camera") stopCamera();
   if(name !== "finale") window.LanternSky?.close();
+  if(name !== "album") window.Book3D?.close();
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
@@ -610,9 +611,14 @@ async function enterAlbum(share){
   $("#albumNote").textContent="正在翻開相冊…";
   const today=new Date();
   const mine={wish:state.wish,scene:state.scene.title,date:rocDate(today),src:state.collage};
-  const list=[{kind:"cover"}];
+  const list=[{kind:"cover"},{kind:"inside"}];
   if(share) list.push(mine);
-  FlipAlbum.open([...list,{kind:"end"}],null);
+  const finished=()=>{
+    const pages=[...list,{kind:"end",note:""}];
+    if(pages.length%2) pages.push({kind:"blank"});
+    return pages;
+  };
+  openAlbum(finished(),null,false);
   let note="";
   try{
     if(share){
@@ -629,7 +635,14 @@ async function enterAlbum(share){
     note=note||"相冊還沒開通，暫時看不到其他人";
   }
   $("#albumNote").textContent=note;
-  FlipAlbum.open([...list,{kind:"end"}],async id=>(await albumCall({action:"albumPage",id})).imageData||"");
+  openAlbum(finished(),async id=>(await albumCall({action:"albumPage",id})).imageData||"",true);
+}
+
+// 有 3D 就用 3D 的書，開不起來才退回平面翻頁
+function openAlbum(pages,loader,keep){
+  const ok=window.Book3D?.open(pages,loader,keep);
+  $(".screen.album").classList.toggle("has-book",!!ok);
+  if(!ok) FlipAlbum.open(pages.filter(page=>page.kind!=="inside"&&page.kind!=="blank"),loader);
 }
 
 function rocDate(date){

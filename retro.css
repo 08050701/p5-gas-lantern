@@ -285,3 +285,13 @@ h2{line-height:1.5}
 .browser-tip{position:fixed;left:12px;right:12px;bottom:12px;z-index:50;display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--paper);color:var(--ink);border:3px double var(--red);border-radius:6px;font-size:20px;line-height:1.7;box-shadow:0 8px 22px rgba(0,0,0,.5)}
 .browser-tip button{flex:none;width:44px;height:44px;font-size:26px;background:none;border:0;color:var(--ink);cursor:pointer}
 .camera-note .text-link{display:block;font-size:21px;color:var(--paper)}
+
+/* 3D 相冊：桌上的一本書 */
+.screen.album{animation:none!important}
+.book-stage{display:none;position:fixed;left:0;top:0;width:100vw;height:100dvh;z-index:0}
+.has-book .book-stage{display:block}
+.has-book .album-book{display:none}
+.screen.album.has-book.is-active{justify-content:flex-end;pointer-events:none}
+.has-book .album-note,.has-book .album-nav,.has-book .text-link{position:relative;z-index:2;pointer-events:auto}
+.book3d{display:block;width:100%!important;height:100%!important;cursor:grab;touch-action:pan-y}
+.book3d:active{cursor:grabbing}

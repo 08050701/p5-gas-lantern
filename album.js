@@ -39,6 +39,7 @@ const FlipAlbum = (() => {
   }
 
   function turn(step){
+    if(window.Book3D?.active){ window.Book3D.step(step); return; }
     const target=at+step*stride();
     if(turning || target<0 || target>=pages.length) return;
     turning=true;
