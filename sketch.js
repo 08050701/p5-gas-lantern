@@ -7,8 +7,8 @@ let state = "wish"; // "wish" | "selfie" | "final" | "saved" | "release_fx" | "r
 const GAS_URL = "https://script.google.com/macros/s/AKfycby8mJZ1G2s4XTW0xiTznLSxSBp7n1jXhQnU9QoMmvzhUzW7Hol-3eryjZgvIMPZslikMQ/exec";
 
 // 音效檔（跟 index.html 放在同一個資料夾）
-const SOUND_BELL_URL = "bell-chord1-83260.mp3";
-const SOUND_PIANO_URL = "golden-sunset-piano-music-200136.mp3";
+const SOUND_BELL_URL = "https://assets.editor.p5js.org/68bfdd75e72d15a331e70880/6be9683d-26a3-46fe-8748-98b5a3f5d911.mp3";
+const SOUND_PIANO_URL = "https://assets.editor.p5js.org/68bfdd75e72d15a331e70880/ac85ddbf-2041-47aa-8241-d7220cae74c4.mp3";
 
 // --- 相機 ---
 let cam = null;
