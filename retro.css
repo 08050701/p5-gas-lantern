@@ -313,3 +313,27 @@ h2{line-height:1.5}
 .finale-line{display:block;margin:-8px 0 20px;font:600 clamp(20px,2vw,25px)/1.6 "LXGW WenKai TC","Noto Serif TC",serif;color:#f4e6c6;text-shadow:0 2px 8px #000;animation-delay:2.8s}
 .finale-end .action-row{animation-delay:4.2s}
 @keyframes slowIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* 文字：標題不留單字，一句話從逗號換行 */
+h1,h2,h3{text-wrap:balance}
+p,small,li{text-wrap:pretty}
+.finale-end p{text-wrap:balance}
+.finale-intro span,.finale-line span{display:inline-block}
+/* 拍照時人站在側邊，姿勢框跟著一起移過去 */
+.camera-stage.has-live .pose-guide{transform-origin:50% 100%;transform:translateX(var(--person-x,0)) scale(.72)}
+/* 按鈕：不折行，主要按鈕永遠在右邊；手機固定在同一個高度，手指不用找 */
+.primary,.secondary{white-space:nowrap}
+@media(max-width:820px){
+  .action-row{flex-wrap:nowrap;gap:12px}
+  .action-row .primary,.action-row .secondary{min-width:0;flex:1 1 0;padding:0 10px;min-height:62px;font-size:20px}
+  .screen.reveal .action-row{position:fixed;left:16px;right:16px;bottom:calc(26px + env(safe-area-inset-bottom));width:auto;z-index:4}
+  #lightBtn{margin-bottom:calc(26px + env(safe-area-inset-bottom));min-width:60%;min-height:62px}
+  .finale-end .action-row{margin-bottom:env(safe-area-inset-bottom)}
+}
+@media(max-width:820px) and (min-height:700px){
+  .screen.review .action-row,.screen.pickup .action-row{position:fixed;left:16px;right:16px;bottom:calc(26px + env(safe-area-inset-bottom));width:auto;z-index:4}
+}
+@media(max-width:820px) and (max-height:699px){
+  .screen.review,.screen.pickup{overflow-y:auto}
+  .screen.review .action-row,.screen.pickup .action-row{margin-top:14px}
+}

@@ -62,18 +62,30 @@ const BgSwap = (() => {
     return {sx:(sourceW-sw)/2, sy:(sourceH-sh)/2, sw, sh};
   }
 
-  // 量出這張老照片的底色：平均色、最暗的黑，人才染得進同一卷底片
+  // 量這張場景：地面的色溫、天空的顏色、光從哪邊來、哪一側比較空
   const tones=new WeakMap(), probe=document.createElement("canvas"), probeCtx=probe.getContext("2d",{willReadFrequently:true});
   probe.width=32; probe.height=24;
+  const lumOf=(r,g,b)=>(r*.3+g*.59+b*.11)/255;
   function sceneTone(scene){
     if(tones.has(scene)) return tones.get(scene);
     probeCtx.drawImage(scene,0,0,32,24);
-    const data=probeCtx.getImageData(0,0,32,24).data, lums=[]; let r=0,g=0,b=0;
-    for(let i=0;i<data.length;i+=4){ r+=data[i]; g+=data[i+1]; b+=data[i+2]; lums.push((data[i]*.3+data[i+1]*.59+data[i+2]*.11)/255); }
-    const n=lums.length; r/=n; g/=n; b/=n;
+    const data=probeCtx.getImageData(0,0,32,24).data, ground=[0,0,0], sky=[0,0,0], lums=[];
+    let groundN=0, skyN=0, left=0, right=0, busyL=0, busyR=0;
+    for(let y=0;y<24;y++) for(let x=0;x<32;x++){
+      const i=(y*32+x)*4, r=data[i], g=data[i+1], b=data[i+2], lum=lumOf(r,g,b);
+      lums.push(lum);
+      if(y>=8){ ground[0]+=r; ground[1]+=g; ground[2]+=b; groundN++; }
+      if(y<6){ sky[0]+=r; sky[1]+=g; sky[2]+=b; skyN++; }
+      if(x<16) left+=lum; else right+=lum;
+      if(x>0 && y>5 && y<20){ const edge=Math.abs(lum-lumOf(data[i-4],data[i-3],data[i-2])); if(x<16) busyL+=edge; else busyR+=edge; }
+    }
     lums.sort((x,y)=>x-y);
-    const dark=Math.round(lums[Math.floor(n*.06)]*255);
-    const tone={color:`rgb(${r|0},${g|0},${b|0})`,lift:`rgb(${dark},${dark*.93|0},${dark*.84|0})`,lum:lums[n>>1]};
+    const dark=Math.round(lums[Math.floor(lums.length*.06)]*255);
+    const rgb=ground.map(v=>v/groundN), tone={
+      rgb, lum:lumOf(...rgb), sky:`rgb(${sky.map(v=>v/skyN|0).join(",")})`, floor:`rgb(${rgb.map(v=>v|0).join(",")})`,
+      lift:`rgb(${dark},${dark*.93|0},${dark*.84|0})`, light:(right-left)/(right+left),
+      side:busyL<busyR?-1:1 // 人站在比較空的那一側，景點留給畫面
+    };
     tones.set(scene,tone);
     return tone;
   }
@@ -89,13 +101,20 @@ const BgSwap = (() => {
     return glow.get(scene);
   }
 
-  let exposure=1, frameCount=0;
-  function meterPerson(){
+  // 色溫回授：量人身上的顏色，每隔幾張慢慢推向現場的光色，人就會跟著照片的色調走
+  let gains=[1,1,1], gainScene=null, frameCount=0;
+  function followScene(tone){
     probeCtx.clearRect(0,0,32,24);
     probeCtx.drawImage(person,0,0,32,24);
-    const data=probeCtx.getImageData(0,0,32,24).data; let sum=0,count=0;
-    for(let i=0;i<data.length;i+=4) if(data[i+3]>200){ sum+=data[i]*.3+data[i+1]*.59+data[i+2]*.11; count++; }
-    return count ? sum/count/255 : 0;
+    const data=probeCtx.getImageData(0,0,32,24).data, sum=[0,0,0]; let count=0;
+    for(let i=0;i<data.length;i+=4) if(data[i+3]>200){ sum[0]+=data[i]; sum[1]+=data[i+1]; sum[2]+=data[i+2]; count++; }
+    if(count<8) return;
+    const mean=sum.map(v=>Math.max(4,v/count)), level=Math.min(.56,Math.max(.36,tone.lum));
+    const sceneLum=Math.max(.05,tone.lum*255);
+    gains=gains.map((gain,c)=>{
+      const target=level*255*(.45+.55*tone.rgb[c]/sceneLum);
+      return Math.min(1.3,Math.max(.68,gain*Math.pow(target/mean[c],.4)));
+    });
   }
 
   // 舊底片的顆粒，整張一起蓋上去，人和背景才像同一次曝光
@@ -107,12 +126,27 @@ const BgSwap = (() => {
   }
   const soft=document.createElement("canvas"), softCtx=soft.getContext("2d");
   const cast=document.createElement("canvas"), castCtx=cast.getContext("2d");
-  const PERSON_SCALE=.9; // 人往後退一點，站在景裡，不是貼在鏡頭前
+  // 出遊照的人不會佔滿畫面：站在側邊三分之一、半身入鏡，眼睛差不多在地平線上
+  const PERSON_SCALE=.72, PERSON_SHIFT=.17;
+  let shift=0;
 
   function placed(c,W,H){
+    c.translate(W*shift,0);
     c.translate(W,0); c.scale(-1,1);
     c.translate(W*(1-PERSON_SCALE)/2,H*(1-PERSON_SCALE));
     c.scale(PERSON_SCALE,PERSON_SCALE);
+  }
+
+  // 手機人像模式的背景：縮小再放大，只糊一點，景還認得出來
+  const depth=new WeakMap();
+  function portraitBackground(scene,bg,W,H){
+    if(!depth.has(scene)){
+      const small=document.createElement("canvas"); small.width=W>>2; small.height=H>>2;
+      const c=small.getContext("2d"); c.imageSmoothingQuality="high";
+      c.drawImage(scene,bg.sx,bg.sy,bg.sw,bg.sh,0,0,small.width,small.height);
+      depth.set(scene,small);
+    }
+    return depth.get(scene);
   }
 
   function fill(mode,color,W,H,alpha=1){
@@ -126,6 +160,12 @@ const BgSwap = (() => {
     const tone=sceneTone(scene);
     const bg=coverCrop(scene.naturalWidth,scene.naturalHeight,W,H);
     ctx.drawImage(scene,bg.sx,bg.sy,bg.sw,bg.sh,0,0,W,H);
+    ctx.save(); ctx.globalAlpha=.55; ctx.imageSmoothingQuality="high";
+    ctx.drawImage(portraitBackground(scene,bg,W,H),0,0,W,H);
+    ctx.restore();
+    shift=tone.side*PERSON_SHIFT;
+    ctx.canvas.closest?.(".camera-stage")?.style.setProperty("--person-x",`${tone.side*17}%`);
+    if(gainScene!==scene){ gainScene=scene; gains=[1,1,1]; }
     const vw=video.videoWidth, vh=video.videoHeight;
     const {sx,sy,sw,sh}=coverCrop(vw,vh,W,H);
     const kx=maskCanvas.width/vw, ky=maskCanvas.height/vh;
@@ -143,25 +183,28 @@ const BgSwap = (() => {
     personCtx.globalCompositeOperation="source-atop"; personCtx.globalAlpha=.35;
     personCtx.drawImage(soft,0,0,W,H);
     personCtx.globalAlpha=1;
-    // 人的衣服、膚色都留著，只收一點飽和、靠一點現場的光色，像老照片手工上色
-    fill("saturation","#808080",W,H,.1);
-    if(exposure<1){ const v=Math.round(exposure*255); fill("multiply",`rgb(${v},${v},${v})`,W,H); }
-    else{ const v=Math.round((exposure-1)*255); fill("screen",`rgb(${v},${v},${v})`,W,H); }
-    fill("color",tone.color,W,H,.12);
+    // 留住人的顏色，但白平衡和亮度跟著場景走
+    const peak=Math.max(...gains), shade=gains.map(v=>Math.round(v/peak*255));
+    fill("multiply",`rgb(${shade.join(",")})`,W,H);
+    if(peak>1){ const v=Math.round((peak-1)*255); fill("screen",`rgb(${v},${v},${v})`,W,H); }
     fill("lighten",tone.lift,W,H,.2);
     personCtx.globalCompositeOperation="destination-in";
     personCtx.save(); placed(personCtx,W,H);
     personCtx.drawImage(maskCanvas,sx*kx,sy*ky,sw*kx,sh*ky,0,0,W,H);
     personCtx.restore();
-    // 現場的光落在人身上
-    personCtx.globalCompositeOperation="source-atop"; personCtx.globalAlpha=.14;
-    personCtx.imageSmoothingQuality="high";
-    personCtx.drawImage(ambient(scene),0,0,W,H);
-    personCtx.restore();
-    if(frameCount++%20===0){
-      const lum=meterPerson();
-      if(lum>.02) exposure=Math.min(1.18,Math.max(.72,exposure*Math.pow(Math.min(.55,Math.max(.36,tone.lum))/lum,.5)));
+    // 現場的光落在人身上：頭頂有天光、腳邊有地面反光、背光那側暗一點
+    const air=personCtx.createLinearGradient(0,H*.3,0,H);
+    air.addColorStop(0,tone.sky); air.addColorStop(.55,"rgba(128,128,128,0)"); air.addColorStop(1,tone.floor);
+    personCtx.globalCompositeOperation="source-atop"; personCtx.globalAlpha=.16;
+    personCtx.fillStyle=air; personCtx.fillRect(0,0,W,H);
+    const dim=Math.min(.34,Math.abs(tone.light)*2.4);
+    if(dim>.02){
+      const from=tone.light>0?0:W, across=personCtx.createLinearGradient(from,0,W-from,0);
+      across.addColorStop(0,`rgba(24,14,8,${dim})`); across.addColorStop(.6,"rgba(24,14,8,0)");
+      personCtx.globalAlpha=1; personCtx.fillStyle=across; personCtx.fillRect(0,0,W,H);
     }
+    personCtx.restore();
+    if(frameCount++%6===0) followScene(tone);
     ctx.save();
     // 人在地上的影子，落在背景上
     const sw4=W>>3, sh4=H>>3;

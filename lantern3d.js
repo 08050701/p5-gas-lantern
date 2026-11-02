@@ -21,22 +21,38 @@ function canvasOf(w,h,draw){
   return tex;
 }
 
-// 直書，由右到左；字數多就自動縮小
-function writeColumns(c,text,x,y,w,h){
-  const chars=[...text];
-  let size=150, cols=1, rows=1;
-  for(;size>30;size-=2){
-    cols=Math.floor(w/(size*1.22)); rows=Math.floor(h/(size*1.1));
-    if(cols>=1 && rows>=1 && cols*rows>=chars.length) break;
+// 把一段話排成直行：逗號、句號是換行的好地方，不把一句話從中間切開，也不留單字孤行
+function columnsOf(text,rows){
+  const phrases=text.split(/[，。！？、；：,.!?;:\s]+/).filter(Boolean).map(p=>[...p]);
+  const columns=[]; let current=[];
+  for(let phrase of phrases){
+    if(current.length && current.length+1+phrase.length>rows){ columns.push(current); current=[]; }
+    while(phrase.length>rows){
+      const cut=phrase.length===rows+1 ? rows-1 : rows;
+      columns.push(phrase.slice(0,cut)); phrase=phrase.slice(cut);
+    }
+    current=current.length ? [...current," ",...phrase] : phrase;
   }
-  const used=Math.ceil(chars.length/rows), blockW=used*size*1.22;
+  if(current.length) columns.push(current);
+  return columns;
+}
+
+// 直書，由右到左；挑放得下的最大字
+function writeColumns(c,text,x,y,w,h){
+  let size=150, columns=[];
+  const gapX=1.42, gapY=1.2;
+  for(;size>=30;size-=2){
+    const rows=Math.floor(h/(size*gapY));
+    if(rows<1) continue;
+    columns=columnsOf(text,rows);
+    if(columns.length*size*gapX<=w) break;
+  }
+  const blockW=columns.length*size*gapX, tallest=Math.max(...columns.map(col=>col.length));
+  const top=y+(h-tallest*size*gapY)/2;
   c.font=`700 ${size}px ${HAND}`; c.textAlign="center"; c.textBaseline="middle"; c.fillStyle=INK;
-  chars.forEach((ch,i)=>{
-    const col=Math.floor(i/rows), row=i%rows;
-    const left=x+(w+blockW)/2-(col+.5)*size*1.22;
-    const count=Math.min(rows,chars.length-col*rows);
-    const top=y+(h-count*size*1.1)/2;
-    c.fillText(ch,left,top+(row+.5)*size*1.1);
+  columns.forEach((col,i)=>{
+    const left=x+(w+blockW)/2-(i+.5)*size*gapX;
+    col.forEach((ch,row)=>c.fillText(ch,left,top+(row+.5)*size*gapY));
   });
 }
 
@@ -55,7 +71,7 @@ function paperTexture({wish,photo,title}){
       c.fillStyle=glow; c.fillRect(x,0,W,H);
       c.strokeStyle="rgba(70,30,10,.35)"; c.lineWidth=4; c.strokeRect(x+2,0,W-4,H);
     });
-    writeColumns(c,wish,3*W+70,110,W-140,H-210);
+    writeColumns(c,wish,3*W+110,Math.round(H*.3),W-220,Math.round(H*.56));
     c.fillStyle=INK; c.font=`700 300px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
     c.fillText("福",W*1.5,H*.5);
     writeColumns(c,title,2*W+120,170,W-240,H-300);
