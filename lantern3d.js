@@ -1,5 +1,6 @@
 // 放天燈：夜空、山影、滿天天燈。紙上寫著自己的願望，點了火才飛上去。
 import * as THREE from "three";
+import { surfaceNormal } from "./surface.js?v=20261102-18";
 
 const clamp = (v,a=0,b=1) => Math.min(b,Math.max(a,v));
 const smooth = t => t*t*t*(t*(t*6-15)+10);
@@ -7,6 +8,7 @@ const span = (t,a,b) => clamp((t-a)/(b-a));
 const INK = "#1d120b";
 const HAND = "'LXGW WenKai TC','Noto Serif TC',serif";
 const PANELS = ["#f7dc92","#ec8e3f","#cf3a24","#f2b348"]; // 正面、右、背、左
+const UNLIT = .34; // 沒點火時紙也要看得清楚字
 const BLESS_WORDS = ["平安","健康","團圓","福","壽","好運","如意","發財"];
 const RIDGES = [
   {z:-170,height:60,base:-8,color:"#2b2f55",seed:2.1},
@@ -56,20 +58,31 @@ function writeColumns(c,text,x,y,w,h){
   });
 }
 
-// 紙面攤平：四面紙接成一張，由左到右是 右、背、左、正
+// 紙面攤平：四面紙接成一張，由左到右是 右、背、左、正。手工紙有纖維、有壓痕，接縫是兩層紙疊著糊起來的
 function paperTexture({wish,photo,title}){
   const W=512, H=1024, order=[1,2,3,0];
-  return canvasOf(W*4,H,c=>{
+  const map=canvasOf(W*4,H,c=>{
     order.forEach((panel,i)=>{
       const x=i*W;
       c.fillStyle=PANELS[panel]; c.fillRect(x,0,W,H);
-      // 紙纖維
       for(let n=0;n<900;n++){ c.fillStyle=`rgba(${Math.random()<.5?"255,255,255":"90,40,10"},${Math.random()*.07})`; c.fillRect(x+Math.random()*W,Math.random()*H,1+Math.random()*26,1); }
-      // 火光從下往上透
-      const glow=c.createRadialGradient(x+W/2,H*.95,40,x+W/2,H*.8,H*.95);
-      glow.addColorStop(0,"rgba(255,246,206,.92)"); glow.addColorStop(.5,"rgba(255,214,130,.4)"); glow.addColorStop(1,"rgba(120,40,10,.16)");
-      c.fillStyle=glow; c.fillRect(x,0,W,H);
-      c.strokeStyle="rgba(70,30,10,.35)"; c.lineWidth=4; c.strokeRect(x+2,0,W-4,H);
+      // 雲龍紙的長纖維
+      for(let n=0;n<70;n++){
+        const fx=x+Math.random()*W, fy=Math.random()*H;
+        c.strokeStyle=`rgba(255,246,220,${.05+Math.random()*.14})`; c.lineWidth=.6+Math.random()*1.2;
+        c.beginPath(); c.moveTo(fx,fy); c.bezierCurveTo(fx+Math.random()*70-35,fy+Math.random()*70-35,fx+Math.random()*90-45,fy+Math.random()*90-45,fx+Math.random()*120-60,fy+Math.random()*120-60); c.stroke();
+      }
+      // 摺過、撐開留下的壓痕
+      for(let n=0;n<26;n++){
+        let cx=x+Math.random()*W, cy=Math.random()*H, angle=Math.random()*6.3;
+        c.strokeStyle=`rgba(${Math.random()<.5?"70,30,10":"255,236,196"},${.05+Math.random()*.08})`; c.lineWidth=1+Math.random();
+        c.beginPath(); c.moveTo(cx,cy);
+        for(let k=0;k<4;k++){ angle+=Math.random()-.5; cx+=Math.cos(angle)*(20+Math.random()*60); cy+=Math.sin(angle)*(20+Math.random()*60); c.lineTo(cx,cy); }
+        c.stroke();
+      }
+      const seam=c.createLinearGradient(x,0,x+W,0);
+      seam.addColorStop(0,"rgba(80,34,10,.42)"); seam.addColorStop(.035,"rgba(80,34,10,.2)"); seam.addColorStop(.04,"rgba(80,34,10,0)"); seam.addColorStop(.96,"rgba(80,34,10,0)"); seam.addColorStop(.965,"rgba(80,34,10,.2)"); seam.addColorStop(1,"rgba(80,34,10,.42)");
+      c.fillStyle=seam; c.fillRect(x,0,W,H);
     });
     writeColumns(c,wish,3*W+110,Math.round(H*.3),W-220,Math.round(H*.56));
     c.fillStyle=INK; c.font=`700 300px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
@@ -83,6 +96,16 @@ function paperTexture({wish,photo,title}){
       c.restore();
     }
   });
+  // 點火後紙本身在發光：下面離火近最亮，往上慢慢暗成橘紅；墨字和纖維透光時還在
+  const emissive=canvasOf(W*2,H/2,(c,w,h)=>{
+    c.drawImage(map.image,0,0,w,h);
+    c.globalCompositeOperation="multiply";
+    const heat=c.createLinearGradient(0,h,0,0);
+    heat.addColorStop(0,"#fff4cc"); heat.addColorStop(.32,"#ffcf7c"); heat.addColorStop(.72,"#e8803a"); heat.addColorStop(1,"#a2441c");
+    c.fillStyle=heat; c.fillRect(0,0,w,h);
+    c.globalCompositeOperation="source-over";
+  });
+  return {map,emissive};
 }
 
 // 四角略方的天燈：上寬下窄，底部開口
@@ -94,7 +117,9 @@ function lanternGeometry(){
   for(let i=0;i<pos.count;i++){
     const x=pos.getX(i), z=pos.getZ(i), a=Math.atan2(x,z);
     const k=1/Math.pow(Math.abs(Math.cos(a))**p+Math.abs(Math.sin(a))**p,1/p)*.9;
-    pos.setX(i,x*k); pos.setZ(i,z*k);
+    // 紙不是撐得平平的：四條接縫吃進去一點，面上有鬆鬆的皺摺
+    const y=pos.getY(i), fold=1+.016*Math.sin(a*14+y*2.6)+.01*Math.sin(y*8+a*5)-.022*Math.pow(Math.abs(Math.sin(a*2)),12);
+    pos.setX(i,x*k*fold); pos.setZ(i,z*k*fold);
   }
   geo.computeVertexNormals();
   return geo;
@@ -119,14 +144,18 @@ function flameTexture(){
 // 遠方別人的天燈：一張貼圖就夠，亮著比細節重要
 function farLanternTexture(word){
   return canvasOf(128,160,(c,w,h)=>{
-    const halo=c.createRadialGradient(w/2,h*.55,6,w/2,h*.55,w*.62);
-    halo.addColorStop(0,"rgba(255,170,70,.75)"); halo.addColorStop(1,"rgba(255,120,40,0)");
+    const halo=c.createRadialGradient(w/2,h*.6,6,w/2,h*.6,w*.62);
+    halo.addColorStop(0,"rgba(255,170,70,.62)"); halo.addColorStop(1,"rgba(255,120,40,0)");
     c.fillStyle=halo; c.fillRect(0,0,w,h);
-    const body=c.createLinearGradient(0,h*.2,0,h*.82);
-    body.addColorStop(0,"#d9602a"); body.addColorStop(.6,"#ffb04d"); body.addColorStop(1,"#fff0b8");
-    c.fillStyle=body; c.beginPath(); c.moveTo(w*.3,h*.22); c.quadraticCurveTo(w/2,h*.14,w*.7,h*.22); c.quadraticCurveTo(w*.8,h*.42,w*.64,h*.8); c.lineTo(w*.36,h*.8); c.quadraticCurveTo(w*.2,h*.42,w*.3,h*.22); c.fill();
-    c.fillStyle="rgba(60,20,8,.8)"; c.font=`700 ${word.length>1?26:40}px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
-    [...word].forEach((ch,i)=>c.fillText(ch,w/2,h*.48+(i-(word.length-1)/2)*28));
+    const body=c.createLinearGradient(0,h*.2,0,h*.8);
+    body.addColorStop(0,"#b8481f"); body.addColorStop(.5,"#f0913c"); body.addColorStop(.85,"#ffd98a"); body.addColorStop(1,"#fff4cc");
+    c.shadowColor="rgba(255,150,60,.9)"; c.shadowBlur=7;
+    c.fillStyle=body; c.beginPath(); c.moveTo(w*.3,h*.2); c.quadraticCurveTo(w/2,h*.13,w*.7,h*.2); c.quadraticCurveTo(w*.8,h*.42,w*.63,h*.8); c.lineTo(w*.37,h*.8); c.quadraticCurveTo(w*.2,h*.42,w*.3,h*.2); c.fill();
+    c.shadowBlur=0;
+    c.strokeStyle="rgba(120,44,12,.3)"; c.lineWidth=1.5;
+    [.41,.59].forEach(k=>{ c.beginPath(); c.moveTo(w*(k+(k-.5)*.5),h*.17); c.quadraticCurveTo(w*(k+(k-.5)*1.1),h*.45,w*(k+(k-.5)*.1),h*.8); c.stroke(); });
+    c.fillStyle="rgba(60,20,8,.42)"; c.font=`700 ${word.length>1?24:36}px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
+    [...word].forEach((ch,i)=>c.fillText(ch,w/2,h*.48+(i-(word.length-1)/2)*26));
   });
 }
 
@@ -184,7 +213,10 @@ class Sky {
       mesh.position.set(0,ridge.base+ridge.height*.75,ridge.z);
       this.scene.add(mesh);
     });
-    const ground=new THREE.Mesh(new THREE.CircleGeometry(90,48).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x0e1226}));
+    this.scene.add(new THREE.HemisphereLight(0x46558c,0x14101e,1.5));
+    const moon=new THREE.DirectionalLight(0x9fb2de,.55); moon.position.set(-6,8,7); this.scene.add(moon);
+    const gravel=surfaceNormal(512,40,40,2,4); gravel.repeat.set(30,30);
+    const ground=new THREE.Mesh(new THREE.CircleGeometry(90,48).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:0x1a1a26,roughness:.92,normalMap:gravel}));
     ground.position.set(0,-.02,-20); this.scene.add(ground);
     this.groundGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture("255,190,110","255,120,40"),blending:THREE.AdditiveBlending,transparent:true,opacity:0,depthWrite:false}));
     this.groundGlow.scale.set(9,3,1); this.groundGlow.position.set(0,.08,.4); this.scene.add(this.groundGlow);
@@ -192,12 +224,17 @@ class Sky {
 
   buildLantern(){
     const g=this.lantern=new THREE.Group();
-    this.paperMat=new THREE.MeshBasicMaterial({side:THREE.DoubleSide,color:0x777777});
+    const creases=surfaceNormal(512,8,20,2.6,5); creases.repeat.set(4,1);
+    this.paperMat=new THREE.MeshStandardMaterial({side:THREE.DoubleSide,roughness:.82,normalMap:creases,normalScale:new THREE.Vector2(.55,.55),emissive:0xffffff,emissiveIntensity:UNLIT});
     this.paper=new THREE.Mesh(lanternGeometry(),this.paperMat); g.add(this.paper);
-    const bamboo=new THREE.MeshBasicMaterial({color:0x4a2f17});
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(.53,.024,8,4).rotateX(Math.PI/2).rotateY(Math.PI/4),bamboo); ring.position.y=.02; g.add(ring);
-    [Math.PI/4,-Math.PI/4].forEach(a=>{ const bar=new THREE.Mesh(new THREE.CylinderGeometry(.008,.008,1.06,6).rotateZ(Math.PI/2).rotateY(a),bamboo); bar.position.y=.02; g.add(bar); });
-    const pad=new THREE.Mesh(new THREE.BoxGeometry(.2,.05,.2),new THREE.MeshBasicMaterial({color:0xd8c9a8})); pad.position.y=.04; g.add(pad);
+    // 底下的竹圈、十字鐵絲，中間綁著浸過油的金紙
+    const bamboo=new THREE.MeshStandardMaterial({color:0x8a6236,roughness:.6});
+    const wire=new THREE.MeshStandardMaterial({color:0x2a2622,roughness:.5,metalness:.7});
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.53,.03,8,4).rotateX(Math.PI/2).rotateY(Math.PI/4),bamboo); ring.position.y=.02; g.add(ring);
+    [Math.PI/4,-Math.PI/4].forEach(a=>{ const bar=new THREE.Mesh(new THREE.CylinderGeometry(.008,.008,1.06,6).rotateZ(Math.PI/2).rotateY(a),wire); bar.position.y=.02; g.add(bar); });
+    this.burner=new THREE.MeshStandardMaterial({color:0xb99a58,roughness:.75,emissive:0xff7a24,emissiveIntensity:0});
+    for(let i=0;i<5;i++){ const leaf=new THREE.Mesh(new THREE.BoxGeometry(.24-i*.012,.012,.17),this.burner); leaf.position.y=.03+i*.014; leaf.rotation.y=(i-2)*.14; g.add(leaf); }
+    this.fire=new THREE.PointLight(0xffa04a,0,14,1.6); this.fire.position.y=.34; g.add(this.fire);
     this.flame=new THREE.Sprite(new THREE.SpriteMaterial({map:flameTexture(),blending:THREE.AdditiveBlending,transparent:true,depthWrite:false}));
     this.flame.position.y=.3; this.flame.scale.set(.001,.001,1); g.add(this.flame);
     this.halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture(),blending:THREE.AdditiveBlending,transparent:true,opacity:0,depthWrite:false}));
@@ -228,11 +265,12 @@ class Sky {
   }
 
   open({wish,photo,title}){
-    this.paperMat.map?.dispose();
-    this.paperMat.map=paperTexture({wish,photo,title}); this.paperMat.needsUpdate=true;
+    this.paperMat.map?.dispose(); this.paperMat.emissiveMap?.dispose();
+    const {map,emissive}=paperTexture({wish,photo,title});
+    this.paperMat.map=map; this.paperMat.emissiveMap=emissive; this.paperMat.needsUpdate=true;
     this.lit=null; this.onDone=null; this.time=0;
     this.lantern.position.set(0,0,0); this.lantern.rotation.set(0,0,0); this.lantern.scale.set(1,1,1);
-    this.paperMat.color.setScalar(.46); this.paperMat.opacity=1; this.lantern.visible=true;
+    this.paperMat.emissiveIntensity=UNLIT; this.fire.intensity=0; this.burner.emissiveIntensity=0; this.lantern.visible=true;
     this.halo.material.opacity=0; this.groundGlow.material.opacity=0; this.flame.scale.set(.001,.001,1);
     this.crowd.forEach(c=>{ c.y=Math.random()*170; c.s.material.opacity=0; });
     this.clock.getDelta();
@@ -256,7 +294,8 @@ class Sky {
       this.lit+=dt;
       const L=this.lit, on=smooth(span(L,0,1.8)), lift=Math.max(0,L-2.4);
       const flicker=1+Math.sin(t*19)*.1+Math.sin(t*31)*.08;
-      this.paperMat.color.setScalar(.46+on*.72*(1+Math.sin(t*23)*.025));
+      this.paperMat.emissiveIntensity=UNLIT+on*.86*(1+Math.sin(t*23)*.025);
+      this.fire.intensity=on*16*flicker; this.burner.emissiveIntensity=on*1.6;
       this.flame.scale.set(.26*on*flicker,.5*on*flicker,1);
       this.halo.material.opacity=on*.55*flicker;
       this.groundGlow.material.opacity=on*.5*(1-span(lift,0,3));
