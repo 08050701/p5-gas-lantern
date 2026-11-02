@@ -76,6 +76,8 @@ function bindEvents(){
   $("#wishBtn").addEventListener("click", () => showScreen("wish"));
   $("#typeBtn").addEventListener("click", openWishDialog);
   $("#micBtn").addEventListener("click", startSpeech);
+  $("#restartBtn").addEventListener("click", () => state.restartListening?.());
+  $("#redoWishBtn").addEventListener("click", redoWish);
   $("#toCameraBtn").addEventListener("click", enterCamera);
   $("#startShotsBtn").addEventListener("click", shootSequence);
   $("#skipBgBtn").addEventListener("click", () => { $("#skipBgBtn").hidden = true; $("#startShotsBtn").hidden = false; shootSequence(); });
@@ -225,8 +227,10 @@ function submitTypedWish(event){
   $("#wishDialog").close();
 }
 
-function acceptWish(wish){
+function acceptWish(wish,by="type"){
   state.wish = wish.slice(0,WISH_MAX);
+  state.wishBy = by;
+  $("#redoWishBtn").textContent = by==="voice" ? "重講一次" : "重寫一次";
   $("#wishText").textContent = `「${state.wish}」`;
   $("#wishPreview").hidden = false;
   $("#micBtn").hidden = true;
@@ -234,6 +238,18 @@ function acceptWish(wish){
   $("#micStatus").textContent = "收到了";
   state.blessingPromise = requestBlessing();
   BgSwap.load();
+}
+
+// 不滿意就重來：講的直接開始聽，打的帶著原本的字回去改
+function redoWish(){
+  const voice = state.wishBy==="voice";
+  $("#wishPreview").hidden = true;
+  $("#micBtn").hidden = false;
+  $("#typeBtn").hidden = false;
+  $("#micStatus").textContent = "按一下，開始說";
+  state.blessingPromise = null;
+  if(voice){ state.wish = ""; startSpeech(); }
+  else openWishDialog();
 }
 
 // 長輩講話會停頓：講到一半停下來不算講完。
@@ -261,8 +277,16 @@ function startSpeech(){
     clearTimeout(silenceTimer); clearTimeout(maxTimer);
     state.stopListening = null;
     finishListening();
-    if(heard()) acceptWish(heard());
+    if(heard()) acceptWish(heard(),"voice");
     else $("#micStatus").textContent = "沒有聽清楚，再試一次或改用打字";
+  };
+  // 講到一半想重來：把聽到的丟掉，斷線重連的流程會接著聽
+  state.restartListening = () => {
+    parts.length = 0; interim = "";
+    $("#restartBtn").hidden = true;
+    $("#micStatus").textContent = "好，請重新說一次";
+    keepWaiting();
+    try{ recognition.abort(); }catch(_){}
   };
   state.stopListening = stop;
   state.listening = true;
@@ -280,6 +304,7 @@ function startSpeech(){
       else if(!last || !last.endsWith(text)) parts.push(text);
     }
     $("#micStatus").textContent = heard() || "正在聽…";
+    $("#restartBtn").hidden = !heard();
     keepWaiting();
   };
   recognition.onerror = event => {
@@ -288,7 +313,7 @@ function startSpeech(){
     clearTimeout(silenceTimer); clearTimeout(maxTimer);
     state.stopListening = null;
     finishListening();
-    if(heard()){ acceptWish(heard()); return; }
+    if(heard()){ acceptWish(heard(),"voice"); return; }
     $("#micStatus").textContent = "沒有收到聲音，改用打字也可以";
     openWishDialog();
   };
@@ -307,6 +332,7 @@ function startSpeech(){
 
 function finishListening(){
   state.listening = false;
+  $("#restartBtn").hidden = true;
   $("#micBtn").classList.remove("is-listening");
   $(".mic-icon").textContent = "說話";
 }
@@ -325,6 +351,7 @@ function localBlessing(wish){
 }
 
 async function requestBlessing(){
+  const wish = state.wish; // 重講之後，上一句的回覆晚到也不算數
   state.blessing = "";
   $("#blessingText").textContent = "正在寫祝福…";
   $("#inlineBlessing").textContent = "請稍等…";
@@ -335,10 +362,12 @@ async function requestBlessing(){
     const response = await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"bless",wish:state.wish}),signal:controller.signal});
     clearTimeout(timer);
     const data = await response.json();
+    if(wish!==state.wish) return state.blessing;
     if(!data.ok) throw new Error(data.error || "祝福暫時沒有送達");
     state.blessing = String(data.reply || "").trim() || localBlessing(state.wish);
     $(".inline-blessing span").textContent = "給您的祝福";
   }catch(error){
+    if(wish!==state.wish) return state.blessing;
     state.blessing = localBlessing(state.wish);
     $(".inline-blessing span").textContent = "給您的祝福";
   }

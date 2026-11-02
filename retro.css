@@ -337,3 +337,5 @@ p,small,li{text-wrap:pretty}
   .screen.review,.screen.pickup{overflow-y:auto}
   .screen.review .action-row,.screen.pickup .action-row{margin-top:14px}
 }
+#restartBtn{display:block;margin:0 auto}
+#restartBtn[hidden]{display:none}
