@@ -8,6 +8,6 @@
 
 - 二胡：tarane468〈Chinese Erhu〉 https://freesound.org/people/tarane468/packs/26451/ ，CC0
 - 笛子：Hypnotriod〈Flute Dizi C all notes + pitched semitones〉 https://freesound.org/people/Hypnotriod/packs/21613/ ，CC0
-- 撥弦（koto）與揚琴（dulcimer）：FluidR3 GM，Frank Wen 製作，經 gleitz/midi-js-soundfonts 轉檔，CC BY 3.0 https://github.com/gleitz/midi-js-soundfonts
+- 撥弦（koto）：FluidR3 GM，Frank Wen 製作，經 gleitz/midi-js-soundfonts 轉檔，CC BY 3.0 https://github.com/gleitz/midi-js-soundfonts
 
 取樣經裁切與音量統一。旋律為鄧雨賢（1944 年歿）所作。

@@ -99,8 +99,8 @@ function bindEvents(){
 function autoStartMusic(event){
   if(state.musicAsked || event.target.closest?.("#musicBtn")){ if(RetroMusic.isPlaying()) RetroMusic.unlock(); state.musicAsked=true; return; }
   state.musicAsked=true;
-  BgSwap.load(); // 第一次點畫面就開始抓，走到拍照時才不用等
-  RetroMusic.start();
+  // 音樂先，去背模型 16MB 排在後面，才不會搶走網路
+  RetroMusic.start().finally(()=>BgSwap.load());
   renderMusicButton();
 }
 

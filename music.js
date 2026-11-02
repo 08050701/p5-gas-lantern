@@ -1,6 +1,6 @@
 "use strict";
 
-// 〈雨夜花〉國樂演奏版：二胡、梆笛、撥弦、揚琴都是真實樂器的錄音取樣，由 Web Audio 依譜演奏。來源見 assets/CREDITS.md。
+// 〈雨夜花〉國樂演奏版：二胡、梆笛、撥弦都是真實樂器的錄音取樣，由 Web Audio 依譜演奏。來源見 assets/CREDITS.md。
 // 曲：鄧雨賢（1944 年歿），只用旋律、不用歌詞。
 // 記譜依簡譜空間的版本（3/4）：[音高, 拍數]，音高用 C 大調 MIDI 編號。
 const G3=55, A3=57, C4=60, D4=62, E4=64, G4=67;
@@ -15,7 +15,7 @@ const BARS = [
   { chord:"C",  notes:[[E4,.5],[D4,.5],[C4,2]] }
 ];
 const CHORDS = { C:[48,60,64,67], Am:[45,60,64,69], G:[43,59,62,67] };
-const BPM = 84;
+const BPM = 66;
 const BEAT = 60/BPM;
 const midiToHz = n => 440*Math.pow(2,(n-69)/12);
 
@@ -24,14 +24,15 @@ const RetroMusic = (() => {
 
   // 一個房間的殘響：老錄音的空氣感都在這裡
   function makeRoom(){
-    const length=ac.sampleRate*1.7, impulse=ac.createBuffer(2,length,ac.sampleRate);
+    const length=ac.sampleRate*1.4, impulse=ac.createBuffer(2,length,ac.sampleRate);
     for(let ch=0;ch<2;ch++){
       const data=impulse.getChannelData(ch);
       for(let i=0;i<length;i++) data[i]=(Math.random()*2-1)*Math.pow(1-i/length,3.2);
     }
     const reverb=ac.createConvolver(), wet=ac.createGain();
-    reverb.buffer=impulse; wet.gain.value=.34;
-    reverb.connect(wet).connect(master);
+    reverb.buffer=impulse; wet.gain.value=.22;
+    const dark=ac.createBiquadFilter(); dark.type="lowpass"; dark.frequency.value=2200;
+    reverb.connect(dark).connect(wet).connect(master);
     return reverb;
   }
 
@@ -42,75 +43,75 @@ const RetroMusic = (() => {
   }
 
   // 每個音的錄音與它實際的音高，用最近的一支移調，所以不會聽得出變調
-  const SAMPLES={"erhu":[["erhu-D4",62.02],["erhu-F4",65.04],["erhu-Gs4",67.95],["erhu-B4",70.86],["erhu-D5",74.02],["erhu-F5",77.04],["erhu-Gs5",80.03]],"dizi":[["dizi-077",77.04],["dizi-079",79.08],["dizi-081",81.04],["dizi-084",84.27],["dizi-086",86.25],["dizi-088",88.23],["dizi-091",91.08]],"pluck":[["koto-G2",43],["koto-A2",45],["koto-C3",48.06],["koto-B3",59.06],["koto-C4",60.06],["koto-D4",62.02],["koto-E4",63.97],["koto-G4",66.92],["koto-A4",68.95]],"dulcimer":[["dulcimer-B4",71.06],["dulcimer-C5",72.06],["dulcimer-D5",74.02],["dulcimer-E5",75.97],["dulcimer-G5",79.08],["dulcimer-A5",81.04]]};
+  const SAMPLES={"erhu":[["erhu-D4",62.02],["erhu-F4",65.04],["erhu-Gs4",67.95],["erhu-B4",70.86],["erhu-D5",74.02],["erhu-F5",77.04],["erhu-Gs5",80.03]],"dizi":[["dizi-077",77.04],["dizi-079",79.08],["dizi-081",81.04],["dizi-084",84.27],["dizi-086",86.25],["dizi-088",88.23],["dizi-091",91.08]],"pluck":[["koto-G2",43],["koto-A2",45],["koto-C3",48.06],["koto-B3",59.06],["koto-C4",60.06],["koto-D4",62.02],["koto-E4",63.97],["koto-G4",66.92],["koto-A4",68.95]]};
   let loading=null;
   const buffers={};
+  const fetchGroup=group=>Promise.all(SAMPLES[group].map(async([name])=>{
+    if(buffers[name]) return;
+    const response=await fetch(`assets/music/${name}.mp3`);
+    buffers[name]=await ac.decodeAudioData(await response.arrayBuffer());
+  }));
+  // 主奏的二胡一到就開始，其他聲部載好了自己加進來，不讓人等全部
   function loadSamples(){
-    if(!loading) loading=Promise.all(Object.values(SAMPLES).flat().map(async([name])=>{
-      const response=await fetch(`assets/music/${name}.mp3`);
-      buffers[name]=await ac.decodeAudioData(await response.arrayBuffer());
-    })).catch(error=>{ console.warn("音樂載入失敗",error); loading=null; });
+    if(!loading) loading=fetchGroup("erhu").then(()=>{
+      Promise.all(["pluck","dizi"].map(fetchGroup)).catch(error=>console.warn("音樂載入失敗",error));
+    }).catch(error=>{ console.warn("音樂載入失敗",error); loading=null; });
     return loading;
   }
 
   // 人不會每個音都一樣大、一樣準時
   const human=(amount)=>(Math.random()*2-1)*amount;
 
-  function play(group,midi,t,dur,level,{from=null,attack=.015,release=.07,send=.4}={}){
+  function play(group,midi,t,dur,level,{from=null,attack=.015,release=.1,send=.3,tone=6000}={}){
     const [name,root]=SAMPLES[group].reduce((best,item)=>Math.abs(item[1]-midi)<Math.abs(best[1]-midi)?item:best);
     if(!buffers[name]) return;
     t=Math.max(t,ac.currentTime);
-    const src=ac.createBufferSource(), env=ac.createGain(), rate=Math.pow(2,(midi-root)/12);
+    const src=ac.createBufferSource(), env=ac.createGain(), soft=ac.createBiquadFilter(), rate=Math.pow(2,(midi-root)/12);
     src.buffer=buffers[name];
+    soft.type="lowpass"; soft.frequency.value=tone; soft.Q.value=.4;
     if(from===null) src.playbackRate.value=rate;
     else{
-      // 從上一個音滑過來，音程越大滑得越久
-      const leap=Math.abs(midi-from);
-      src.playbackRate.setValueAtTime(rate*Math.pow(2,(from-midi)/12),t);
-      src.playbackRate.setTargetAtTime(rate,t,leap>2?.05:.025);
+      // 手指帶過去就好：只從音程的一小段滑上來，滑太多會像彈簧
+      src.playbackRate.setValueAtTime(rate*Math.pow(2,(from-midi)*.3/12),t);
+      src.playbackRate.setTargetAtTime(rate,t,.03);
     }
     env.gain.setValueAtTime(.0001,t);
     env.gain.linearRampToValueAtTime(level,t+attack);
     env.gain.setTargetAtTime(.0001,t+dur,release);
-    src.connect(env); out(env,send);
+    src.connect(soft).connect(env); out(env,send);
     src.start(t); src.stop(t+dur+release*6);
   }
 
   let erhuMidi=null, erhuEnd=0;
   function erhuLine(notes,level){
     notes.forEach(([midi,at,dur])=>{
-      const from=erhuMidi!==null && at-erhuEnd<.25 && erhuMidi!==midi ? erhuMidi : null;
-      play("erhu",midi,at+human(.008),dur+.05,level*(1+human(.1)),{from,attack:from===null?.05:.03,release:.09,send:.45});
+      const leap=erhuMidi===null?0:Math.abs(midi-erhuMidi);
+      const from=at-erhuEnd<.25 && leap>2 ? erhuMidi : null;
+      play("erhu",midi,at+human(.005),dur+.08,level*(1+human(.06)),{from,attack:.06,release:.14,send:.3,tone:4200});
       erhuMidi=midi; erhuEnd=at+dur;
     });
   }
 
+  // 笛子壓低音量、磨掉高頻，像遠遠吹過來，不搶二胡
   function dizi(midi,t,dur,level){
-    play("dizi",midi,t+human(.006),dur+.03,level*(1+human(.08)),{attack:.012,release:.06,send:.5});
+    play("dizi",midi,t+human(.005),dur+.06,level*(1+human(.05)),{attack:.05,release:.14,send:.4,tone:2800});
   }
 
-  function pluck(midi,t,level){ play("pluck",midi,t+human(.006),1.6,level*(1+human(.12)),{attack:.002,release:.3,send:.25}); }
-  function dulcimer(midi,t,level=.3){ play("dulcimer",midi,t+human(.005),1.4,level*(1+human(.15)),{attack:.002,release:.35,send:.45}); }
+  function pluck(midi,t,level){ play("pluck",midi,t+human(.006),1.8,level*(1+human(.1)),{attack:.003,release:.4,send:.25,tone:2400}); }
 
-  // 三輪編曲：二胡先唱，笛子在句尾應和；第二輪換笛子，二胡托在底下；第三輪一起收
+  // 三輪編曲：二胡獨奏；第二輪笛子輕輕接手，二胡長音托著；第三輪二胡回來，笛子只在句尾應一聲
   function scheduleBar(bar,t,index){
     let at=t;
     const line=bar.notes.map(([midi,beats])=>{ const note=[midi,at,beats*BEAT]; at+=beats*BEAT; return note; });
     const [bass,...upper]=CHORDS[bar.chord];
-    const lead=level=>line.forEach(([midi,start,dur])=>dizi(midi+24,start,dur,level));
-    if(pass===0){
-      erhuLine(line.map(([m,a,d])=>[m+12,a,d]),.85);
-      if(index===3||index===7){ dizi(upper[2]+12,t+1.5*BEAT,.75*BEAT,.4); dizi(upper[1]+12,t+2.25*BEAT,.7*BEAT,.4); }
-    }else if(pass===1){
-      lead(.6);
-      erhuLine([[upper[1],t,1.5*BEAT],[upper[2],t+1.5*BEAT,1.4*BEAT]],.42);
-    }else{
-      erhuLine(line.map(([m,a,d])=>[m+12,a,d]),.75);
-      lead(.34);
-    }
-    pluck(bass,t,.6);
-    [1,2].forEach(beat=>upper.forEach(n=>pluck(n,t+beat*BEAT,.2)));
-    if(pass>0) [0,1,2,1,2,1].forEach((n,i)=>dulcimer(upper[n]+12,t+i*BEAT/2));
+    if(pass===1){
+      line.forEach(([midi,start,dur])=>dizi(midi+24,start,dur,.3));
+      erhuLine([[upper[1],t,2.9*BEAT]],.3);
+    }else erhuLine(line.map(([m,a,d])=>[m+12,a,d]),pass?.72:.8);
+    if(pass===2 && (index===3||index===7)) dizi(upper[2]+12,t+1.6*BEAT,1.3*BEAT,.22);
+    pluck(bass,t,.42);
+    pluck(upper[index%3],t+BEAT,.15);
+    if(index%2) pluck(upper[(index+1)%3],t+2*BEAT,.13);
   }
 
   function tick(){
