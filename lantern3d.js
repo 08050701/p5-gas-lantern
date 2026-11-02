@@ -1,6 +1,6 @@
 // 放天燈：夜空、山影、滿天天燈。紙上寫著自己的願望，點了火才飛上去。
 import * as THREE from "three";
-import { surfaceNormal } from "./surface.js?v=20261102-18";
+import { surfaceNormal } from "./surface.js?v=20261102-19";
 
 const clamp = (v,a=0,b=1) => Math.min(b,Math.max(a,v));
 const smooth = t => t*t*t*(t*(t*6-15)+10);

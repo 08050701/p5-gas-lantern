@@ -6,16 +6,16 @@
 const G3=55, A3=57, C4=60, D4=62, E4=64, G4=67;
 const BARS = [
   { chord:"C",  notes:[[G3,.5],[A3,.5],[G3,1],[E4,1]] },
-  { chord:"Am", notes:[[E4,.5],[D4,.5],[C4,.5],[A3,.5],[G3,1]] },
+  { chord:"C",  notes:[[E4,.5],[D4,.5],[C4,.5],[A3,.5],[G3,1]] },
   { chord:"C",  notes:[[C4,.5],[D4,.5],[E4,1],[G4,.5],[C4,.25],[D4,.25]] },
   { chord:"G",  notes:[[E4,.5],[E4,.5],[D4,2]] },
   { chord:"C",  notes:[[G4,.5],[G4,.5],[G4,.5],[E4,.25],[G4,.25],[E4,1]] },
-  { chord:"Am", notes:[[E4,.5],[D4,.25],[E4,.25],[D4,.5],[C4,.5],[A3,1]] },
+  { chord:"F",  notes:[[E4,.5],[D4,.25],[E4,.25],[D4,.5],[C4,.5],[A3,1]] },
   { chord:"C",  notes:[[G3,.5],[A3,.5],[G3,1],[E4,1]] },
   { chord:"C",  notes:[[E4,.5],[D4,.5],[C4,2]] }
 ];
-const CHORDS = { C:[48,60,64,67], Am:[45,60,64,69], G:[43,59,62,67] };
-const BPM = 66;
+const CHORDS = { C:[48,60,64,67], F:[43,60,65,69], G:[43,59,62,67] }; // 全用大調和弦，同一段旋律聽起來才開朗
+const BPM = 90;
 const BEAT = 60/BPM;
 const midiToHz = n => 440*Math.pow(2,(n-69)/12);
 
@@ -43,7 +43,7 @@ const RetroMusic = (() => {
   }
 
   // 每個音的錄音與它實際的音高，用最近的一支移調，所以不會聽得出變調
-  const SAMPLES={"erhu":[["erhu-D4",62.02],["erhu-F4",65.04],["erhu-Gs4",67.95],["erhu-B4",70.86],["erhu-D5",74.02],["erhu-F5",77.04],["erhu-Gs5",80.03]],"dizi":[["dizi-077",77.04],["dizi-079",79.08],["dizi-081",81.04],["dizi-084",84.27],["dizi-086",86.25],["dizi-088",88.23],["dizi-091",91.08]],"pluck":[["koto-G2",43],["koto-A2",45],["koto-C3",48.06],["koto-B3",59.06],["koto-C4",60.06],["koto-D4",62.02],["koto-E4",63.97],["koto-G4",66.92],["koto-A4",68.95]]};
+  const SAMPLES={"erhu":[["erhu-D4",62.02],["erhu-F4",65.04],["erhu-Gs4",68.02],["erhu-B4",71.02],["erhu-D5",74.02],["erhu-F5",77.04],["erhu-Gs5",80.01]],"dizi":[["dizi-077",77.1],["dizi-079",79.04],["dizi-081",81.04],["dizi-084",84.12],["dizi-086",86.05],["dizi-088",88.23],["dizi-091",91.1]],"pluck":[["koto-G2",42.92],["koto-A2",44.95],["koto-C3",47.96],["koto-B3",58.95],["koto-C4",59.96],["koto-D4",61.98],["koto-E4",64.01],["koto-G4",66.95],["koto-A4",68.95]]};
   let loading=null;
   const buffers={};
   const fetchGroup=group=>Promise.all(SAMPLES[group].map(async([name])=>{
@@ -87,14 +87,14 @@ const RetroMusic = (() => {
     notes.forEach(([midi,at,dur])=>{
       const leap=erhuMidi===null?0:Math.abs(midi-erhuMidi);
       const from=at-erhuEnd<.25 && leap>2 ? erhuMidi : null;
-      play("erhu",midi,at+human(.005),dur+.08,level*(1+human(.06)),{from,attack:.06,release:.14,send:.3,tone:4200});
+      play("erhu",midi,at+human(.005),dur+.08,level*(1+human(.06)),{from,attack:.04,release:.1,send:.2,tone:4800});
       erhuMidi=midi; erhuEnd=at+dur;
     });
   }
 
   // 笛子壓低音量、磨掉高頻，像遠遠吹過來，不搶二胡
   function dizi(midi,t,dur,level){
-    play("dizi",midi,t+human(.005),dur+.06,level*(1+human(.05)),{attack:.05,release:.14,send:.4,tone:2800});
+    play("dizi",midi,t+human(.005),dur+.06,level*(1+human(.05)),{attack:.04,release:.1,send:.28,tone:3600});
   }
 
   function pluck(midi,t,level){ play("pluck",midi,t+human(.006),1.8,level*(1+human(.1)),{attack:.003,release:.4,send:.25,tone:2400}); }
@@ -102,16 +102,17 @@ const RetroMusic = (() => {
   // 三輪編曲：二胡獨奏；第二輪笛子輕輕接手，二胡長音托著；第三輪二胡回來，笛子只在句尾應一聲
   function scheduleBar(bar,t,index){
     let at=t;
-    const line=bar.notes.map(([midi,beats])=>{ const note=[midi,at,beats*BEAT]; at+=beats*BEAT; return note; });
+    // 每個音稍微斷開一點，有走路的輕快感，不要一路黏著拉
+    const line=bar.notes.map(([midi,beats])=>{ const note=[midi,at,beats*BEAT*.9]; at+=beats*BEAT; return note; });
     const [bass,...upper]=CHORDS[bar.chord];
     if(pass===1){
-      line.forEach(([midi,start,dur])=>dizi(midi+24,start,dur,.3));
-      erhuLine([[upper[1],t,2.9*BEAT]],.3);
+      line.forEach(([midi,start,dur])=>dizi(midi+24,start,dur,.36));
+      erhuLine([[upper[1],t,2.8*BEAT]],.24);
     }else erhuLine(line.map(([m,a,d])=>[m+12,a,d]),pass?.72:.8);
-    if(pass===2 && (index===3||index===7)) dizi(upper[2]+12,t+1.6*BEAT,1.3*BEAT,.22);
+    if(pass===2 && (index===3||index===7)) dizi(upper[2]+12,t+2*BEAT,.9*BEAT,.26);
     pluck(bass,t,.42);
-    pluck(upper[index%3],t+BEAT,.15);
-    if(index%2) pluck(upper[(index+1)%3],t+2*BEAT,.13);
+    pluck(upper[index%3],t+BEAT,.17);
+    pluck(upper[(index+1)%3],t+2*BEAT,.15);
   }
 
   function tick(){

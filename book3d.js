@@ -1,6 +1,6 @@
 // 大家的相冊：一本放在桌上的 3D 書。紙會沿著弧線彎起來，手指拖到哪、紙就跟到哪。
 import * as THREE from "three";
-import { wornPaint, surfaceNormal, shopLight, shadeVertices } from "./surface.js?v=20261102-18";
+import { wornPaint, surfaceNormal, shopLight, shadeVertices } from "./surface.js?v=20261102-19";
 
 const W = 3, H = 5; // 跟拍貼一樣 3:5，照片剛好滿版不裁切
 const COLS = 48, ROWS = 12;
