@@ -5,23 +5,44 @@ const VISION_VERSION = "0.10.14";
 const VISION_CDN = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISION_VERSION}`;
 
 const BgSwap = (() => {
-  let segmenter=null, loading=null, lastTs=0;
+  let segmenter=null, loading=null, lastTs=0, cpuOnly=false;
   const maskCanvas=document.createElement("canvas");
   const maskCtx=maskCanvas.getContext("2d",{willReadFrequently:true});
   const person=document.createElement("canvas");
   const personCtx=person.getContext("2d");
 
-  function load(){
+  // 模型有 16MB，自己抓才知道進度，換 CPU 重建時也不用再下載一次
+  let model=null, progress=null;
+  async function fetchModel(){
+    if(model) return model;
+    const response=await fetch("assets/selfie_multiclass.tflite");
+    if(!response.ok) throw new Error(`模型下載失敗 ${response.status}`);
+    const total=+response.headers.get("content-length")||0, chunks=[], reader=response.body.getReader();
+    let got=0;
+    for(;;){
+      const {done,value}=await reader.read();
+      if(done) break;
+      chunks.push(value); got+=value.length;
+      if(total) progress?.(Math.min(99,Math.round(got/total*100)));
+    }
+    const bytes=new Uint8Array(got);
+    let at=0; chunks.forEach(chunk=>{ bytes.set(chunk,at); at+=chunk.length; });
+    return model=bytes;
+  }
+
+  function load(onProgress){
+    if(onProgress) progress=onProgress;
     if(!loading) loading=(async()=>{
-      const vision=await import(`${VISION_CDN}/vision_bundle.mjs`);
+      const [vision,bytes]=await Promise.all([import(`${VISION_CDN}/vision_bundle.mjs`),fetchModel()]);
       const fileset=await vision.FilesetResolver.forVisionTasks(`${VISION_CDN}/wasm`);
-      const options=delegate=>({
-        baseOptions:{ modelAssetPath:"assets/selfie_multiclass.tflite", delegate },
+      const create=delegate=>vision.ImageSegmenter.createFromOptions(fileset,{
+        baseOptions:{ modelAssetBuffer:bytes.slice(), delegate },
         runningMode:"VIDEO", outputConfidenceMasks:true, outputCategoryMask:false
       });
-      // 多類別模型分得出頭髮、皮膚、衣服、配件，比單純的人形模型準；有顯示晶片就用，手機才跟得上
-      segmenter=await vision.ImageSegmenter.createFromOptions(fileset,options("GPU"))
-        .catch(()=>vision.ImageSegmenter.createFromOptions(fileset,options("CPU")));
+      // 多類別模型分得出頭髮、皮膚、衣服、配件，比單純的人形模型準；有顯示晶片就用，手機才跟得上。
+      // 有些手機的顯示晶片會卡住不回應，等不到就換 CPU
+      const stuck=new Promise((_,reject)=>setTimeout(()=>reject(new Error("GPU 沒有回應")),12000));
+      segmenter=await (cpuOnly ? create("CPU") : Promise.race([create("GPU"),stuck]).catch(()=>create("CPU")));
       return true;
     })().catch(error=>{ console.warn("去背載入失敗",error); loading=null; return false; });
     return loading;
@@ -35,8 +56,13 @@ const BgSwap = (() => {
     if(!force && now-lastRun<gap && previous) return true;
     lastRun=now;
     const ts=Math.max(now,lastTs+1); lastTs=ts;
-    const result=segmenter.segmentForVideo(video,ts);
-    const masks=result.confidenceMasks;
+    let masks;
+    try{ masks=segmenter.segmentForVideo(video,ts).confidenceMasks; }
+    catch(error){
+      // 手機切到背景回來，顯示晶片可能被收走了：改用 CPU 重建
+      console.warn("去背中斷",error); segmenter=null; loading=null; cpuOnly=true; load();
+      return false;
+    }
     const {width,height}=masks[0], background=masks[0].getAsFloat32Array();
     if(maskCanvas.width!==width||!previous){ maskCanvas.width=width; maskCanvas.height=height; previous=new Float32Array(background.length); }
     const image=maskCtx.createImageData(width,height);

@@ -78,6 +78,7 @@ function bindEvents(){
   $("#micBtn").addEventListener("click", startSpeech);
   $("#toCameraBtn").addEventListener("click", enterCamera);
   $("#startShotsBtn").addEventListener("click", shootSequence);
+  $("#skipBgBtn").addEventListener("click", () => { $("#skipBgBtn").hidden = true; $("#startShotsBtn").hidden = false; shootSequence(); });
   $("#poseRollBtn").addEventListener("click", rollPoses);
   $("#lightBtn").addEventListener("click", lightLantern);
   $("#retakeBtn").addEventListener("click", retake);
@@ -98,6 +99,7 @@ function bindEvents(){
 function autoStartMusic(event){
   if(state.musicAsked || event.target.closest?.("#musicBtn")){ if(RetroMusic.isPlaying()) RetroMusic.unlock(); state.musicAsked=true; return; }
   state.musicAsked=true;
+  BgSwap.load(); // 第一次點畫面就開始抓，走到拍照時才不用等
   RetroMusic.start();
   renderMusicButton();
 }
@@ -373,6 +375,8 @@ function sceneImage(){
 
 // 相機畫面一進來就換背景，看到的就是拍出來的樣子
 function startLivePreview(){
+  $("#skipBgBtn").hidden = true;
+  $("#startShotsBtn").hidden = false;
   const live = $("#liveCanvas");
   const liveCtx = live.getContext("2d");
   const stage = $("#cameraStage");
@@ -391,6 +395,21 @@ function startLivePreview(){
   requestAnimationFrame(loop);
 }
 
+// 背景模型有 25MB，網路慢要等一分多鐘：邊等邊看得到自己，等到了才拍；失敗就一直重試，要不要先拍由人決定
+async function prepareBackground(){
+  const run = state.liveRun, note = $("#cameraNote"), skip = $("#skipBgBtn");
+  const progress = percent => { if(run === state.liveRun && !state.busy) note.textContent = `正在準備老照片背景 ${percent}%`; };
+  note.textContent = "正在準備老照片背景…";
+  const offer = setTimeout(() => { if(run === state.liveRun) { skip.hidden = false; $("#startShotsBtn").hidden = true; } }, 30000);
+  while(run === state.liveRun && !await BgSwap.load(progress)) await sleep(4000);
+  clearTimeout(offer);
+  if(run !== state.liveRun || state.busy) return;
+  skip.hidden = true;
+  $("#startShotsBtn").hidden = false;
+  $("#startShotsBtn").disabled = false;
+  note.textContent = "倒數 3 秒，連拍三張";
+}
+
 async function startCamera(){
   stopCamera();
   $("#startShotsBtn").disabled = true;
@@ -400,12 +419,9 @@ async function startCamera(){
     state.stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:1280},height:{ideal:960}},audio:false});
     video.srcObject = state.stream;
     await video.play();
-    $("#cameraPlaceholder").innerHTML = "<span>正在換背景…</span>";
-    const swapped = await Promise.race([BgSwap.load(),sleep(15000).then(()=>false)]);
     $("#cameraPlaceholder").style.display = "none";
-    $("#startShotsBtn").disabled = false;
-    if(swapped) startLivePreview();
-    else $("#cameraNote").textContent = "背景換不了，先用原本的畫面拍";
+    startLivePreview();
+    prepareBackground();
   }catch(_){
     $("#cameraPlaceholder").innerHTML = "<span>無法開啟相機<br><small>請允許相機權限後重新整理</small></span>";
     $("#startShotsBtn").disabled = true;
