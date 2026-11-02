@@ -2,14 +2,14 @@
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby8mJZ1G2s4XTW0xiTznLSxSBp7n1jXhQnU9QoMmvzhUzW7Hol-3eryjZgvIMPZslikMQ/exec";
 const SCENES = [
-  { key:"alishan", title:"阿里山小火車", icon:"阿里山", image:"assets/taiwan-alishan.jpg", poem:"蒸汽火車，載著木頭下山。" },
-  { key:"tamsui", title:"淡水河渡船", icon:"淡水", image:"assets/taiwan-tamsui.jpg", poem:"帆船慢慢過河，遠遠就是大橋。" },
+  { key:"alishan", title:"阿里山小火車", icon:"阿里山", image:"assets/taiwan-alishan.jpg", poem:"小火車靠站，山嵐慢慢飄過來。" },
+  { key:"tamsui", title:"淡水河渡船", icon:"淡水", image:"assets/taiwan-tamsui.jpg", poem:"渡船靠岸，對面就是觀音山。" },
   { key:"beach", title:"淡水海水浴場", icon:"淡水", image:"assets/taiwan-beach.jpg", poem:"對面就是觀音山。" },
   { key:"xiluo", title:"西螺大橋", icon:"西螺", image:"assets/taiwan-xiluo.jpg", poem:"大橋通車那一天，大家都來看。" },
-  { key:"village", title:"山村吊橋", icon:"山村", image:"assets/taiwan-village.jpg", poem:"牽著豬過吊橋的日子。" },
-  { key:"sunmoon", title:"日月潭", icon:"日月潭", image:"assets/taiwan-sunmoon.jpg", poem:"小舟划過湖面。" },
+  { key:"village", title:"山村吊橋", icon:"山村", image:"assets/taiwan-village.jpg", poem:"過了吊橋，就是回家的路。" },
+  { key:"sunmoon", title:"日月潭", icon:"日月潭", image:"assets/taiwan-sunmoon.jpg", poem:"小舟靠在湖邊，水很靜。" },
   { key:"qingshui", title:"清水斷崖", icon:"東海岸", image:"assets/taiwan-qingshui.jpg", poem:"山壁直直落進海裡。" },
-  { key:"puli", title:"烏牛欄吊橋", icon:"埔里", image:"assets/taiwan-puli.jpg", poem:"車子慢慢開過吊橋。" },
+  { key:"puli", title:"烏牛欄吊橋", icon:"埔里", image:"assets/taiwan-puli.jpg", poem:"站在橋頭，風從山谷吹上來。" },
   { key:"keelungbeach", title:"基隆海水浴場", icon:"基隆", image:"assets/taiwan-keelungbeach.jpg", poem:"夏天，大家都來玩水。" },
   { key:"keelung", title:"基隆港", icon:"基隆", image:"assets/taiwan-keelung.jpg", poem:"大船進港的地方。" },
   { key:"chihkan", title:"赤崁樓", icon:"臺南", image:"assets/taiwan-chihkan.jpg", poem:"府城的老樓閣。" },
@@ -20,12 +20,12 @@ const SCENES = [
   { key:"guanziling", title:"關子嶺溫泉", icon:"關子嶺", image:"assets/taiwan-guanziling.jpg", poem:"山裡的溫泉旅社。" },
   { key:"mtali", title:"阿里山村落", icon:"阿里山", image:"assets/taiwan-mtali.jpg", poem:"山腰上的小村子，炊煙慢慢升起。" },
   { key:"yushan", title:"阿里山望玉山", icon:"阿里山", image:"assets/taiwan-yushan.jpg", poem:"沿著鐵道走，遠遠看得到玉山。" },
-  { key:"xiziwan", title:"西子灣海水浴場", icon:"高雄", image:"assets/taiwan-xiziwan.jpg", poem:"彩旗飄飄，沙灘上好熱鬧。" },
-  { key:"cijin", title:"旗後海水浴場", icon:"旗後", image:"assets/taiwan-cijin.jpg", poem:"浪打過來，大家笑成一團。" },
+  { key:"xiziwan", title:"西子灣海水浴場", icon:"高雄", image:"assets/taiwan-xiziwan.jpg", poem:"彩旗飄飄，海風吹著晚霞。" },
+  { key:"cijin", title:"旗後海水浴場", icon:"旗後", image:"assets/taiwan-cijin.jpg", poem:"浪花一層一層打上岸。" },
   { key:"yancheng", title:"高雄銀座", icon:"鹽埕", image:"assets/taiwan-yancheng.jpg", poem:"穿得漂漂亮亮，來逛街。" },
-  { key:"fengshan", title:"鳳山街景", icon:"鳳山", image:"assets/taiwan-fengshan.jpg", poem:"從高處看，整條街都在眼前。" },
+  { key:"fengshan", title:"鳳山街景", icon:"鳳山", image:"assets/taiwan-fengshan.jpg", poem:"老榕樹下，整條街都涼涼的。" },
   { key:"shimen", title:"牡丹石門", icon:"屏東", image:"assets/taiwan-shimen.jpg", poem:"兩邊山壁夾著一條溪。" },
-  { key:"jiaoban", title:"角板山台車", icon:"桃園", image:"assets/taiwan-jiaoban.jpg", poem:"推著小台車，過山邊的木橋。" }
+  { key:"jiaoban", title:"角板山台車", icon:"桃園", image:"assets/taiwan-jiaoban.jpg", poem:"小台車停在山邊，等人來推。" }
 ];
 
 const WISH_MAX = 300;

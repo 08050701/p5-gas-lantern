@@ -144,11 +144,11 @@ const BgSwap = (() => {
     personCtx.drawImage(soft,0,0,W,H);
     personCtx.globalAlpha=1;
     // 人的衣服、膚色都留著，只收一點飽和、靠一點現場的光色，像老照片手工上色
-    fill("saturation","#808080",W,H,.2);
+    fill("saturation","#808080",W,H,.1);
     if(exposure<1){ const v=Math.round(exposure*255); fill("multiply",`rgb(${v},${v},${v})`,W,H); }
     else{ const v=Math.round((exposure-1)*255); fill("screen",`rgb(${v},${v},${v})`,W,H); }
     fill("color",tone.color,W,H,.12);
-    fill("lighten",tone.lift,W,H,.45);
+    fill("lighten",tone.lift,W,H,.2);
     personCtx.globalCompositeOperation="destination-in";
     personCtx.save(); placed(personCtx,W,H);
     personCtx.drawImage(maskCanvas,sx*kx,sy*ky,sw*kx,sh*ky,0,0,W,H);
