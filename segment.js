@@ -76,9 +76,18 @@ const BgSwap = (() => {
       image.data[i*4+3]=255*t*t*(3-2*t);
     }
     maskCtx.putImageData(image,0,0);
+    bounds=personBounds(width,height);
     masks.forEach(m=>m.close());
     gap=Math.max(70,(performance.now()-now)*2.5); // 慢的手機少算幾次，畫面才不會卡
     return true;
+  }
+
+  // 人在鏡頭畫面裡的範圍（0–1）。幾個雜點不算，要整排有人才算
+  function personBounds(width,height){
+    const rows=new Uint16Array(height), cols=new Uint16Array(width);
+    for(let y=0;y<height;y++) for(let x=0;x<width;x++) if(previous[y*width+x]>.6){ rows[y]++; cols[x]++; }
+    const top=rows.findIndex(n=>n>2), left=cols.findIndex(n=>n>2), right=width-1-[...cols].reverse().findIndex(n=>n>2);
+    return top<0 ? null : {top:top/height, left:left/width, right:(right+1)/width};
   }
 
   function coverCrop(sourceW,sourceH,W,H){
@@ -154,13 +163,28 @@ const BgSwap = (() => {
   const cast=document.createElement("canvas"), castCtx=cast.getContext("2d");
   // 出遊照的人不會佔滿畫面：站在側邊三分之一、半身入鏡，眼睛差不多在地平線上
   const PERSON_SCALE=.72, PERSON_SHIFT=.17;
-  let shift=0;
+  let bounds=null, size=PERSON_SCALE, offset=(1-PERSON_SCALE)/2;
+
+  const roomFrom=(gap,start,span)=>Math.min(1,Math.max(0,(gap-start)/span));
+
+  // 鏡頭畫面縮小後，它的邊就落在照片中間，人一碰到就像被刀切：
+  // 所以人靠近鏡頭哪一邊，那一邊就貼回照片邊緣；頭頂碰到鏡頭上緣就放回原尺寸
+  function frameFor(crop,video,side){
+    const view=bounds && {
+      top:(bounds.top*video.videoHeight-crop.sy)/crop.sh,
+      left:1-(bounds.right*video.videoWidth-crop.sx)/crop.sw,
+      right:1-(bounds.left*video.videoWidth-crop.sx)/crop.sw
+    };
+    const top=view?roomFrom(view.top,.03,.1):1, left=view?roomFrom(view.left,.02,.08):1, right=view?roomFrom(1-view.right,.02,.08):1;
+    const scale=1-(1-PERSON_SCALE)*Math.min(top,left+right,1);
+    const spare=1-scale, center=view?(view.left+view.right)/2:.5;
+    const wanted=.5+side*PERSON_SHIFT-scale*center;
+    return {scale,x:Math.min(spare*left,Math.max(spare*(1-right),Math.min(spare,Math.max(0,wanted))))};
+  }
 
   function placed(c,W,H){
-    c.translate(W*shift,0);
-    c.translate(W,0); c.scale(-1,1);
-    c.translate(W*(1-PERSON_SCALE)/2,H*(1-PERSON_SCALE));
-    c.scale(PERSON_SCALE,PERSON_SCALE);
+    c.translate(W*(offset+size),H*(1-size));
+    c.scale(-size,size);
   }
 
   // 手機人像模式的背景：縮小再放大，只糊一點，景還認得出來
@@ -189,11 +213,16 @@ const BgSwap = (() => {
     ctx.save(); ctx.globalAlpha=.55; ctx.imageSmoothingQuality="high";
     ctx.drawImage(portraitBackground(scene,bg,W,H),0,0,W,H);
     ctx.restore();
-    shift=tone.side*PERSON_SHIFT;
-    ctx.canvas.closest?.(".camera-stage")?.style.setProperty("--person-x",`${tone.side*17}%`);
     if(gainScene!==scene){ gainScene=scene; gains=[1,1,1]; }
     const vw=video.videoWidth, vh=video.videoHeight;
     const {sx,sy,sw,sh}=coverCrop(vw,vh,W,H);
+    // 預覽慢慢跟，人才不會看到畫面在跳；拍下去那張直接到位
+    const frame=frameFor({sx,sy,sw,sh},video,tone.side), stage=ctx.canvas.closest?.(".camera-stage"), follow=stage?.2:1;
+    size+=(frame.scale-size)*follow; offset+=(frame.x-offset)*follow;
+    if(stage){
+      stage.style.setProperty("--person-x",`${((offset+size/2-.5)*100).toFixed(1)}%`);
+      stage.style.setProperty("--person-size",size.toFixed(3));
+    }
     const kx=maskCanvas.width/vw, ky=maskCanvas.height/vh;
     if(person.width!==W||person.height!==H){ person.width=W; person.height=H; }
     personCtx.save();
