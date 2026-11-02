@@ -1,6 +1,6 @@
 "use strict";
 
-// 〈雨夜花〉演奏版：口琴、二胡、月琴、揚琴，全部用 Web Audio 現場合成，不放任何錄音檔。
+// 〈雨夜花〉國樂演奏版：二胡、梆笛、月琴、揚琴，全部用 Web Audio 現場合成，不放任何錄音檔。
 // 曲：鄧雨賢（1944 年歿），只用旋律、不用歌詞。
 // 記譜依簡譜空間的版本（3/4）：[音高, 拍數]，音高用 C 大調 MIDI 編號。
 const G3=55, A3=57, C4=60, D4=62, E4=64, G4=67;
@@ -41,50 +41,110 @@ const RetroMusic = (() => {
     node.connect(gain).connect(room);
   }
 
-  // 口琴：兩個微微走音的振盪器加顫音
-  function harmonica(midi,t,dur,level=.3){
-    const env=ac.createGain(), filter=ac.createBiquadFilter(), vib=ac.createOscillator(), vibAmt=ac.createGain();
-    filter.type="lowpass"; filter.frequency.value=1700; filter.Q.value=.6;
-    vib.frequency.value=5.2; vibAmt.gain.value=3; vib.connect(vibAmt);
-    [["triangle",-4,.6],["sawtooth",4,.12]].forEach(([type,detune,gainLevel])=>{
-      const osc=ac.createOscillator(), gain=ac.createGain();
-      osc.type=type; osc.frequency.value=midiToHz(midi); osc.detune.value=detune;
-      gain.gain.value=gainLevel; vibAmt.connect(osc.detune);
-      osc.connect(gain).connect(filter); osc.start(t); osc.stop(t+dur+.4);
+  // 兩種樂器的波形：只給各泛音的強度，其餘交給共鳴
+  let waves=null, noiseBuffer=null, grit=null;
+  function instruments(){
+    if(waves) return;
+    const wave=amps=>{ const real=new Float32Array(amps.length+1), imag=new Float32Array(amps.length+1); amps.forEach((v,i)=>imag[i+1]=v); return ac.createPeriodicWave(real,imag); };
+    waves={
+      // 弓弦的泛音又多又密，高處還有力氣，蛇皮共鳴再把聲音捏細
+      erhu:wave(Array.from({length:32},(_,i)=>(i%2?.72:1)/Math.pow(i+1,.72))),
+      // 笛子是奇次泛音強、偶次弱
+      dizi:wave([1,.2,.52,.08,.3,.05,.17,.03,.09,.02,.05])
+    };
+    noiseBuffer=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate);
+    const data=noiseBuffer.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
+    grit=new Float32Array(1024);
+    for(let i=0;i<1024;i++){ const x=i/511.5-1; grit[i]=Math.tanh(x*3.4); }
+  }
+  function noiseSource(t,end){
+    const src=ac.createBufferSource(); src.buffer=noiseBuffer; src.loop=true;
+    src.start(t,Math.random()*1.8); src.stop(end);
+    return src;
+  }
+  const filter=(type,hz,q,gain=0)=>{ const f=ac.createBiquadFilter(); f.type=type; f.frequency.value=hz; f.Q.value=q; f.gain.value=gain; return f; };
+
+  // 二胡：一弓拉到底，手指在弦上滑過去。音和音之間是連著的，這是它最像人聲的地方
+  let erhuMidi=null, erhuEnd=0;
+  function erhuLine(notes,level){
+    const t0=notes[0][1], last=notes[notes.length-1], end=last[1]+last[2];
+    const osc=ac.createOscillator(), vib=ac.createOscillator(), vibAmt=ac.createGain(), env=ac.createGain(), shaper=ac.createWaveShaper();
+    const joined=erhuMidi!==null && t0-erhuEnd<.25;
+    osc.setPeriodicWave(waves.erhu);
+    osc.frequency.setValueAtTime(midiToHz(joined?erhuMidi:notes[0][0])*(joined?1:.965),t0);
+    vib.frequency.value=5.9; vib.connect(vibAmt).connect(osc.detune);
+    vibAmt.gain.setValueAtTime(0,t0);
+    env.gain.setValueAtTime(.0001,t0);
+    env.gain.exponentialRampToValueAtTime(level,t0+(joined?.03:.09));
+    let previous=joined?erhuMidi:notes[0][0];
+    notes.forEach(([midi,at,dur],i)=>{
+      const leap=Math.abs(midi-previous);
+      // 音程越大滑得越明顯，先滑才到音
+      osc.frequency.setTargetAtTime(midiToHz(midi),Math.max(t0,at-(leap>2?.07:.015)),leap>2?.055:.03);
+      // 長音後段才開始揉弦，換音時手指先停下來
+      vibAmt.gain.setTargetAtTime(0,at,.02);
+      if(dur>.34) vibAmt.gain.setTargetAtTime(32,at+Math.min(.16,dur*.3),.14);
+      // 每個音弓壓略放再推，運弓的呼吸
+      if(i){ env.gain.setTargetAtTime(level*.74,at-.03,.02); env.gain.setTargetAtTime(level,at+.02,.07); }
+      if(dur>.6) env.gain.setTargetAtTime(level*.84,at+dur*.6,.2);
+      previous=midi;
     });
-    filter.connect(env); out(env,.35);
-    env.gain.setValueAtTime(.0001,t);
-    env.gain.exponentialRampToValueAtTime(level,t+.05);
-    env.gain.setTargetAtTime(level*.7,t+.08,.2);
-    env.gain.setTargetAtTime(.0001,t+dur*.92,.1);
-    vib.start(t); vib.stop(t+dur+.4);
+    env.gain.setTargetAtTime(.0001,end-.02,.07);
+    shaper.curve=grit; shaper.oversample="2x";
+    const drive=ac.createGain(); drive.gain.value=.8;
+    const trim=ac.createGain(); trim.gain.value=.6;
+    const low=filter("highpass",330,.7), nasal=filter("peaking",820,1.4,9), mid=filter("peaking",1750,2,6), edge=filter("peaking",3200,1.6,7), top=filter("lowpass",7000,.5);
+    osc.connect(drive).connect(shaper).connect(trim).connect(low).connect(nasal).connect(mid).connect(edge).connect(top).connect(env);
+    // 松香磨弦的沙沙聲
+    const bow=noiseSource(t0,end+.3), bowBand=filter("bandpass",3000,.8), bowLevel=ac.createGain();
+    bowLevel.gain.value=.05;
+    bow.connect(bowBand).connect(bowLevel).connect(env);
+    out(env,.5);
+    osc.start(t0); osc.stop(end+.4); vib.start(t0); vib.stop(end+.4);
+    erhuMidi=last[0]; erhuEnd=end;
   }
 
-  // 二胡：弓拉進來、音從下面滑上去，尾音才開始揉弦
-  function erhu(midi,t,dur,level=.26){
-    const env=ac.createGain(), body=ac.createBiquadFilter(), bright=ac.createBiquadFilter(), vib=ac.createOscillator(), vibAmt=ac.createGain();
-    const slide=dur>.3?-85:-35;
-    body.type="peaking"; body.frequency.value=950; body.Q.value=1.1; body.gain.value=7;
-    bright.type="lowpass"; bright.frequency.value=2500; bright.Q.value=.5;
-    vib.frequency.value=5.7;
-    vibAmt.gain.setValueAtTime(0,t);
-    vibAmt.gain.setValueAtTime(0,t+Math.min(.2,dur*.4));
-    vibAmt.gain.linearRampToValueAtTime(dur>.3?19:7,t+Math.min(.55,dur*.85));
-    vib.connect(vibAmt);
-    [[0,.34],[6,.2]].forEach(([cents,gainLevel])=>{
-      const osc=ac.createOscillator(), gain=ac.createGain();
-      osc.type="sawtooth"; osc.frequency.value=midiToHz(midi);
-      osc.detune.setValueAtTime(slide+cents,t);
-      osc.detune.linearRampToValueAtTime(cents,t+.11);
-      gain.gain.value=gainLevel; vibAmt.connect(osc.detune);
-      osc.connect(gain).connect(body); osc.start(t); osc.stop(t+dur+.5);
-    });
-    body.connect(bright).connect(env); out(env,.6);
+  // 梆笛：氣聲、笛膜的沙沙聲，長音前帶倚音，顫音是用氣吹出來的
+  function dizi(midi,t,dur,level=.2,grace=null){
+    const end=t+dur, hz=midiToHz(midi), osc=ac.createOscillator(), env=ac.createGain(), breath=ac.createGain();
+    osc.setPeriodicWave(waves.dizi);
+    if(grace!==null){
+      osc.frequency.setValueAtTime(midiToHz(grace),t);
+      osc.frequency.setValueAtTime(hz*.994,t+.065);
+      osc.frequency.setTargetAtTime(hz,t+.065,.02);
+    }else{
+      osc.frequency.setValueAtTime(hz*.985,t);
+      osc.frequency.setTargetAtTime(hz,t,.018);
+    }
     env.gain.setValueAtTime(.0001,t);
-    env.gain.exponentialRampToValueAtTime(level,t+Math.min(.11,dur*.4));
-    env.gain.setTargetAtTime(level*.8,t+.14,.3);
-    env.gain.setTargetAtTime(.0001,t+dur*.96,.12);
-    vib.start(t); vib.stop(t+dur+.5);
+    env.gain.exponentialRampToValueAtTime(level*1.1,t+.022);
+    env.gain.setTargetAtTime(level,t+.03,.04);
+    env.gain.setTargetAtTime(.0001,end-.03,.045);
+    // 氣息起伏，音量比音高動得多
+    breath.gain.value=1;
+    if(dur>.45){
+      const lfo=ac.createOscillator(), amount=ac.createGain(), bend=ac.createGain();
+      lfo.frequency.value=5.1;
+      amount.gain.setValueAtTime(0,t);
+      amount.gain.setTargetAtTime(.2,t+.2,.14);
+      bend.gain.value=9;
+      lfo.connect(amount).connect(breath.gain); lfo.connect(bend).connect(osc.detune);
+      lfo.start(t); lfo.stop(end+.2);
+    }
+    osc.connect(breath);
+    breath.connect(filter("lowpass",9000,.5)).connect(env);
+    // 笛膜：泛音推過頭，在 4 到 7 kHz 震出的沙沙亮聲
+    const shaper=ac.createWaveShaper(), push=ac.createGain(), buzz=ac.createGain();
+    shaper.curve=grit; push.gain.value=3.4; buzz.gain.value=.16;
+    breath.connect(push).connect(shaper).connect(filter("highpass",3600,.8)).connect(filter("peaking",5300,1.1,8)).connect(buzz).connect(env);
+    // 吹孔的氣聲，起音時多一點
+    const air=noiseSource(t,end+.2), airBand=filter("bandpass",Math.min(6000,hz*2.4),.9), airLevel=ac.createGain();
+    airLevel.gain.setValueAtTime(.34,t);
+    airLevel.gain.setTargetAtTime(.1,t+.03,.05);
+    air.connect(airBand).connect(airLevel).connect(env);
+    out(env,.55);
+    osc.start(t); osc.stop(end+.2);
   }
 
   // 月琴：撥一下就散掉的乾淨聲音
@@ -119,22 +179,32 @@ const RetroMusic = (() => {
     osc.connect(env); out(env,.2); osc.start(t); osc.stop(t+.08);
   }
 
-  // 三輪編曲：口琴先唱，二胡接手，最後一起收
+  // 倚音往上鄰音起，五聲音階裡的上一個音
+  const SCALE=[0,2,4,7,9];
+  function upperNeighbor(midi){
+    for(let n=midi+1;n<midi+6;n++) if(SCALE.includes(n%12)) return n;
+    return midi+2;
+  }
+
+  // 三輪編曲：二胡先唱，笛子在句尾應和；第二輪換笛子，二胡托在底下；第三輪一起收
   function scheduleBar(bar,t,index){
     let at=t;
-    bar.notes.forEach(([midi,beats])=>{
-      const dur=beats*BEAT;
-      if(pass===0) harmonica(midi+12,at,dur);
-      else if(pass===1) erhu(midi+12,at,dur);
-      else{ erhu(midi+12,at,dur,.2); harmonica(midi,at,dur,.16); }
-      at+=dur;
-    });
+    const line=bar.notes.map(([midi,beats])=>{ const note=[midi,at,beats*BEAT]; at+=beats*BEAT; return note; });
     const [bass,...upper]=CHORDS[bar.chord];
+    const lead=(shift,level)=>line.forEach(([midi,start,dur])=>dizi(midi+shift,start,dur,level,dur>=BEAT*.9?upperNeighbor(midi+shift):null));
+    if(pass===0){
+      erhuLine(line.map(([m,a,d])=>[m+12,a,d]),.5);
+      if(index===3||index===7){ dizi(upper[2]+12,t+1.5*BEAT,.75*BEAT,.13); dizi(upper[1]+12,t+2.25*BEAT,.7*BEAT,.13,upper[2]+12); }
+    }else if(pass===1){
+      lead(24,.25);
+      erhuLine([[upper[1],t,1.5*BEAT],[upper[2],t+1.5*BEAT,1.4*BEAT]],.26);
+    }else{
+      erhuLine(line.map(([m,a,d])=>[m+12,a,d]),.42);
+      lead(24,.15);
+    }
     pluck(bass,t,.3,.9);
     [1,2].forEach(beat=>upper.forEach(n=>pluck(n,t+beat*BEAT,.06)));
-    if(pass===0 && (index===3||index===7)) erhu(upper[2]+12,t+1.5*BEAT,1.4*BEAT,.1); // 樂句尾巴，二胡輕輕應一聲
     if(pass>0) [0,1,2,1,2,1].forEach((n,i)=>dulcimer(upper[n]+12,t+i*BEAT/2));
-    if(pass===1) harmonica(upper[0],t,2.8*BEAT,.07);
     if(pass===2) woodblock(t);
   }
 
@@ -158,6 +228,7 @@ const RetroMusic = (() => {
       master.connect(limiter).connect(ac.destination);
       mix=ac.createGain(); mix.connect(master);
       room=makeRoom();
+      instruments();
       ac.addEventListener("statechange",()=>{ if(playing && ac.state!=="running") ac.resume().catch(()=>{}); });
     }
     return ac;
@@ -192,7 +263,7 @@ const RetroMusic = (() => {
     unlock();
     playing=true;
     master.gain.cancelScheduledValues(ac.currentTime);
-    master.gain.setTargetAtTime(.8,ac.currentTime,.4);
+    master.gain.setTargetAtTime(.66,ac.currentTime,.4);
     barIndex=0; pass=0; nextBarTime=0;
     tick(); timer=setInterval(tick,250);
   }

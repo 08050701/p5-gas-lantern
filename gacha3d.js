@@ -5,18 +5,23 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 
 const GLOBE_CENTER = new THREE.Vector3(0,4.2,0);
 const GLOBE_R = 1.46;
-const CAP_R = .32;
-const CAP_COUNT = 36;
+const CAP_R = .28;
+const CAP_COUNT = 56;
 const COLORS = ["#a8281f","#2f5d50","#d6a62e","#2c5f8a","#c4602a"];
-const CHUTE = new THREE.Vector3(0,.66,.8);
-const TRAY = new THREE.Vector3(0,.52,1.5);
+const CHUTE = new THREE.Vector3(0,.74,1.34);
+const TRAY = new THREE.Vector3(0,.66,1.8);
+const FRONT = 1.46; // 機械面板的正面
+const SLOT = new THREE.Vector3(.68,1.58,FRONT);
+const CRANK = new THREE.Vector3(0,1.58,FRONT);
+const COIN_HOME = new THREE.Vector3(2.15,.42,1.9);
+const OUT = new THREE.Vector3(0,1.46,2.75); // 打開扭蛋的位置
 const clamp = (v,a=0,b=1) => Math.min(b,Math.max(a,v));
 const ease = t => t*t*(3-2*t);
 const smoother = t => t*t*t*(t*(t*6-15)+10);
 const span = (t,a,b) => clamp((t-a)/(b-a));
 
 function textPlane(w,h,draw,opts={}){
-  const px = 220;
+  const px = opts.px||220;
   const c = document.createElement("canvas"); c.width = w*px; c.height = h*px;
   draw(c.getContext("2d"),c.width,c.height);
   const tex = new THREE.CanvasTexture(c);
@@ -61,23 +66,31 @@ function wornPaint(base,fade,seed=1){
   return {map:tex(c,true),roughnessMap:tex(rough,false)};
 }
 
-// 掉漆、鏽斑貼在機身上：舊鐵殼的味道都在這層
-function agedDecal(w,h){
-  return textPlane(w,h,(c,W,H)=>{
-    c.clearRect(0,0,W,H);
-    // 機身的細金線框，老機器都是手工描的
-    c.strokeStyle="rgba(214,178,104,.85)"; c.lineWidth=5;
-    c.beginPath(); c.roundRect(20,20,W-40,H-40,34); c.stroke();
-    c.lineWidth=2; c.beginPath(); c.roundRect(34,34,W-68,H-68,26); c.stroke();
-    // 下緣幾處手碰出來的小磕痕
-    for(let i=0;i<9;i++){
-      const x=30+Math.random()*(W-60), y=H*(.9+Math.random()*.09), r=2+Math.random()*7;
-      c.fillStyle=`rgba(112,92,70,${.4+Math.random()*.4})`;
-      c.beginPath();
-      for(let a=0;a<6.3;a+=.7){ const q=r*(.6+Math.random()*.7); c.lineTo(x+Math.cos(a)*q,y+Math.sin(a)*q*.7); }
-      c.closePath(); c.fill();
-    }
-  },{transparent:true});
+// 車床做出來的零件：給一串 [半徑, 高度]，轉一圈
+const lathe = (points,segments=96) => new THREE.LatheGeometry(new THREE.SplineCurve(points.map(([r,y])=>new THREE.Vector2(r,y))).getPoints(points.length*6),segments);
+
+// 把手中心的滾花鈕：一圈細齒，手才抓得住
+function knurled(radius,depth,teeth=32){
+  const shape=new THREE.Shape();
+  for(let i=0;i<teeth*2;i++){
+    const a=i/(teeth*2)*Math.PI*2, r=i%2?radius:radius*.955;
+    i?shape.lineTo(Math.cos(a)*r,Math.sin(a)*r):shape.moveTo(Math.cos(a)*r,Math.sin(a)*r);
+  }
+  shape.closePath();
+  return new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelSize:.012,bevelThickness:.012,bevelSegments:2,curveSegments:1});
+}
+
+// 蝶形把手：中間細、兩端圓，像老機器上的翼形螺絲
+function butterfly(length,waist,lobe,depth){
+  const L=length/2, shape=new THREE.Shape();
+  shape.moveTo(-waist,0);
+  shape.bezierCurveTo(-waist,L*.42,-lobe,L*.52,-lobe,L*.8);
+  shape.bezierCurveTo(-lobe,L*1.06,lobe,L*1.06,lobe,L*.8);
+  shape.bezierCurveTo(lobe,L*.52,waist,L*.42,waist,0);
+  shape.bezierCurveTo(waist,-L*.42,lobe,-L*.52,lobe,-L*.8);
+  shape.bezierCurveTo(lobe,-L*1.06,-lobe,-L*1.06,-lobe,-L*.8);
+  shape.bezierCurveTo(-lobe,-L*.52,-waist,-L*.42,-waist,0);
+  return new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelSize:.03,bevelThickness:.03,bevelSegments:4,curveSegments:24});
 }
 
 class Machine {
@@ -127,49 +140,55 @@ class Machine {
 
   buildMachine(){
     const m = this.rig;
-    const enamel = new THREE.MeshPhysicalMaterial({...wornPaint("#8a2117","rgba(150,84,60,",1),roughness:.72,metalness:.06,clearcoat:.32,clearcoatRoughness:.42});
-    const chrome = new THREE.MeshStandardMaterial({...wornPaint("#cfc8b6","rgba(90,72,50,",2),metalness:.95,roughness:.58});
-    const dark = new THREE.MeshStandardMaterial({color:0x17100b,roughness:.9});
-    const wood = new THREE.MeshStandardMaterial({...wornPaint("#6a4120","rgba(120,80,46,",3),roughness:.85});
+    const enamel = new THREE.MeshPhysicalMaterial({...wornPaint("#8e2318","rgba(150,84,60,",1),roughness:.62,metalness:.05,clearcoat:.5,clearcoatRoughness:.34});
+    const chrome = new THREE.MeshStandardMaterial({...wornPaint("#d8d2c2","rgba(90,72,50,",2),metalness:1,roughness:.62});
+    const polished = new THREE.MeshStandardMaterial({color:0xd6d0c0,metalness:1,roughness:.22});
+    const brass = new THREE.MeshStandardMaterial({color:0xb8934a,metalness:1,roughness:.34});
+    const dark = new THREE.MeshStandardMaterial({color:0x120c08,roughness:.85});
+    const wood = new THREE.MeshStandardMaterial({...wornPaint("#6e4322","rgba(120,80,46,",3),roughness:.8});
+    wood.map.repeat.set(5,1.4); wood.roughnessMap.repeat.set(5,1.4); wood.envMapIntensity=.3;
     const add = (geo,mat,x=0,y=0,z=0,parent=m) => { const o=new THREE.Mesh(geo,mat); o.position.set(x,y,z); o.castShadow=true; o.receiveShadow=true; parent.add(o); return o; };
 
-    // 柑仔店木櫃台
-    const counter = add(new RoundedBoxGeometry(5,.32,3.5,4,.05),wood,0,-.16,.45);
+    // 柑仔店的木櫃台，一路延伸到畫面外，機台才有地方站
+    const counter = add(new RoundedBoxGeometry(44,8,5.6,4,.05),wood,0,-4,.7,this.scene);
     counter.castShadow = false;
-    [[-1.1,-.9],[1.1,-.9],[-1.1,.9],[1.1,.9]].forEach(([x,z])=>add(new THREE.CylinderGeometry(.13,.16,.14,20),chrome,x,.07,z));
+    add(new RoundedBoxGeometry(44,.1,.1,3,.04),wood,0,-.42,3.52,this.scene);
 
-    add(new RoundedBoxGeometry(2.7,2.56,2.3,6,.14),enamel,0,1.42,0);
-    const skirt = add(new RoundedBoxGeometry(2.86,.16,2.46,4,.06),chrome,0,.2,0);
-    skirt.castShadow = false;
-    add(new THREE.CylinderGeometry(1.36,1.42,.16,48),chrome,0,2.76,0);
-    add(new THREE.CylinderGeometry(1.08,1.3,.22,48),enamel,0,2.92,0);
-    add(new THREE.TorusGeometry(1.02,.06,16,60).rotateX(Math.PI/2),chrome,0,3.05,0);
-
-    const aged = agedDecal(2.6,2.45); aged.position.set(0,1.42,1.153); aged.castShadow=false; m.add(aged);
-
-    const sign = textPlane(2.14,.56,(c,W,H)=>{
-      c.fillStyle="#f1e3c6"; c.fillRect(0,0,W,H);
-      c.strokeStyle="#3a2a1c"; c.lineWidth=8; c.strokeRect(9,9,W-18,H-18);
-      c.fillStyle="#a8281f"; c.font="700 88px 'Noto Serif TC', serif"; c.textAlign="center"; c.textBaseline="middle";
-      c.fillText("轉 來 坐",W/2,H/2+5);
+    // 鑄造機身：底盤、收腰、肩、托住玻璃球的杯座，一體成形
+    add(lathe([[1.58,.04],[1.6,.12],[1.56,.2],[1.44,.26],[1.34,.42],[1.25,.8],[1.22,1.3],[1.24,1.8],[1.34,2.25],[1.42,2.5],[1.4,2.66],[1.26,2.84],[1.12,3.02],[1.05,3.12]]),enamel);
+    add(new THREE.TorusGeometry(1.59,.025,12,96).rotateX(Math.PI/2),brass,0,.12,0);
+    add(new THREE.TorusGeometry(1.42,.018,12,96).rotateX(Math.PI/2),brass,0,2.5,0);
+    add(lathe([[.94,3.08],[1,3.09],[1.07,3.12],[1.09,3.17],[1.05,3.22],[.98,3.2]]),polished);
+    [0,1,2,3,4,5,6,7].forEach(i=>{
+      const a=(i+.5)/8*Math.PI*2;
+      add(new THREE.CylinderGeometry(.05,.06,.04,6),chrome,Math.cos(a)*1.46,.25,Math.sin(a)*1.46).rotation.x=Math.cos(a+1)*.3;
     });
-    sign.position.set(0,2.28,1.158); m.add(sign);
-    const price = textPlane(.34,1.08,(c,W,H)=>{
-      c.fillStyle="#f1e3c6"; c.font="700 58px 'Noto Serif TC', serif"; c.textAlign="center"; c.textBaseline="middle";
+
+    // 機械面板：一塊厚鑄件鎖在機身正面
+    add(new RoundedBoxGeometry(2.04,2.16,.56,8,.1),enamel,0,1.4,1.18);
+    // 手描的金線框
+    [[0,2.38,1.82,.014],[0,.42,1.82,.014],[-.91,1.4,.014,1.97],[.91,1.4,.014,1.97]].forEach(([x,y,w,h])=>add(new THREE.BoxGeometry(w,h,.006),brass,x,y,FRONT+.002).castShadow=false);
+
+    const sign = textPlane(1.4,.3,(c,W,H)=>{
+      c.fillStyle="#efe2c4"; c.fillRect(0,0,W,H);
+      c.strokeStyle="#7c1c14"; c.lineWidth=9; c.strokeRect(11,11,W-22,H-22);
+      c.fillStyle="#8e2318"; c.font="700 84px 'Noto Serif TC', serif"; c.textAlign="center"; c.textBaseline="middle";
+      c.fillText("轉 來 坐",W/2,H/2+6);
+    },{px:440});
+    sign.position.set(0,2.17,FRONT+.012); m.add(sign);
+    const price = textPlane(.22,.66,(c,W,H)=>{
+      c.fillStyle="#efe2c4"; c.fillRect(0,0,W,H);
+      c.fillStyle="#3a2a1c"; c.font="700 68px 'Noto Serif TC', serif"; c.textAlign="center"; c.textBaseline="middle";
       [..."每次壹圓"].forEach((ch,i)=>c.fillText(ch,W/2,H*(.14+i*.24)));
-    },{transparent:true});
-    price.position.set(-1.05,1.45,1.158); m.add(price);
+    },{px:440});
+    price.position.set(-.68,1.58,FRONT+.012); m.add(price);
 
-    // 銘牌與螺絲：真機器的面板都是一片片鎖上去的
-    const screw=(x,y,z=1.17)=>{ const head=add(new THREE.CylinderGeometry(.035,.04,.02,14).rotateX(Math.PI/2),chrome,x,y,z); head.castShadow=false; const cut=add(new THREE.BoxGeometry(.055,.008,.006),dark,x,y,z+.012); cut.rotation.z=Math.random()*3; cut.castShadow=false; };
-    add(new RoundedBoxGeometry(1.5,.05,.04,2,.015),chrome,0,1.96,1.16).castShadow=false;
-    add(new RoundedBoxGeometry(1.5,.05,.04,2,.015),chrome,0,.86,1.16).castShadow=false;
-    [[-1.2,2.52],[1.2,2.52],[-1.2,.32],[1.2,.32],[1.05,1.82],[1.05,1.08]].forEach(([x,y])=>screw(x,y));
-    [-1.1,-.55,0,.55,1.1].forEach(x=>screw(x,.2,1.235));
+    const screw=(x,y,z=FRONT+.03)=>{ const head=add(new THREE.CylinderGeometry(.038,.042,.024,14).rotateX(Math.PI/2),polished,x,y,z); head.castShadow=false; const cut=add(new THREE.BoxGeometry(.06,.009,.006),dark,x,y,z+.013); cut.rotation.z=Math.random()*3; cut.castShadow=false; };
+    [[-.82,2.3],[.82,2.3],[-.82,.5],[.82,.5]].forEach(([x,y])=>screw(x,y));
 
-    // 投幣孔
-    add(new RoundedBoxGeometry(.4,.62,.06,3,.02),chrome,1.05,1.45,1.17);
-    add(new THREE.BoxGeometry(.05,.34,.02),dark,1.05,1.45,1.2);
+    // 投幣孔：黃銅小蓋板
+    add(new RoundedBoxGeometry(.26,.6,.05,4,.02),brass,SLOT.x,SLOT.y,FRONT+.02);
+    add(new THREE.BoxGeometry(.05,.34,.02),dark,SLOT.x,SLOT.y,FRONT+.045);
     const gold = new THREE.MeshStandardMaterial({color:0xc9a24c,metalness:1,roughness:.35});
     const face = textPlane(.4,.4,(c,W,H)=>{
       c.fillStyle="#c9a24c"; c.fillRect(0,0,W,H);
@@ -178,46 +197,49 @@ class Machine {
       c.translate(W/2,H/2); c.rotate(Math.PI/2); c.fillText("壹",0,4);
     }).material;
     face.metalness=.75;
-    this.coin = add(new THREE.CylinderGeometry(.2,.2,.04,40).rotateZ(Math.PI/2),[gold,face,face],1.8,.5,1.5);
-    this.slotRing = add(new THREE.TorusGeometry(.46,.055,10,48),new THREE.MeshBasicMaterial({color:0xffd86a,transparent:true,depthWrite:false}),1.05,1.45,1.22);
-    this.slotRing.scale.set(.62,.9,1); this.slotRing.castShadow=false;
-    this.crankRing = add(new THREE.TorusGeometry(.6,.05,10,56),this.slotRing.material,0,1.45,1.24);
+    this.coin = add(new THREE.CylinderGeometry(.2,.2,.04,40).rotateZ(Math.PI/2),[gold,face,face],COIN_HOME.x,COIN_HOME.y,COIN_HOME.z);
+    this.slotRing = add(new THREE.TorusGeometry(.46,.05,10,48),new THREE.MeshBasicMaterial({color:0xffd86a,transparent:true,depthWrite:false}),SLOT.x,SLOT.y,FRONT+.08);
+    this.slotRing.scale.set(.5,.86,1); this.slotRing.castShadow=false;
+    this.crankRing = add(new THREE.TorusGeometry(.46,.04,10,56),this.slotRing.material,CRANK.x,CRANK.y,FRONT+.1);
     this.crankRing.castShadow=false;
     // 看不見的感應區：手指比零件粗，範圍放大一點
     const hitMat = new THREE.MeshBasicMaterial({visible:false});
     const hit = (geo,x,y,z,part) => { const o=new THREE.Mesh(geo,hitMat); o.position.set(x,y,z); o.userData.part=part; m.add(o); return o; };
-    this.hits = [hit(new THREE.BoxGeometry(.78,1.1,.3),1.05,1.45,1.25,"slot"),hit(new THREE.SphereGeometry(.5,12,10),1.8,.5,1.5,"slot"),hit(new THREE.CylinderGeometry(.66,.66,.6,24).rotateX(Math.PI/2),0,1.45,1.3,"crank")];
+    this.hits = [hit(new THREE.BoxGeometry(.6,1.1,.3),SLOT.x,SLOT.y,FRONT+.1,"slot"),hit(new THREE.SphereGeometry(.5,12,10),COIN_HOME.x,COIN_HOME.y,COIN_HOME.z,"slot"),hit(new THREE.CylinderGeometry(.5,.5,.6,24).rotateX(Math.PI/2),CRANK.x,CRANK.y,FRONT+.2,"crank")];
 
-    // 轉把手
-    this.crank = new THREE.Group(); this.crank.position.set(0,1.45,1.16); m.add(this.crank);
-    const plate = add(new THREE.CylinderGeometry(.5,.53,.08,56).rotateX(Math.PI/2),chrome,0,1.45,1.17);
-    plate.castShadow = false;
-    add(new THREE.CylinderGeometry(.4,.4,.1,48).rotateX(Math.PI/2),new THREE.MeshStandardMaterial({color:0xb9b2a0,metalness:.9,roughness:.42}),0,0,.08,this.crank);
-    add(new RoundedBoxGeometry(.24,.88,.22,4,.08),chrome,0,0,.22,this.crank);
-    add(new THREE.SphereGeometry(.14,24,16),chrome,0,0,.36,this.crank);
+    // 轉把手：滾花圓座加蝶形把手
+    add(new THREE.CylinderGeometry(.4,.42,.04,64).rotateX(Math.PI/2),polished,CRANK.x,CRANK.y,FRONT+.03).castShadow=false;
+    this.crank = new THREE.Group(); this.crank.position.copy(CRANK); m.add(this.crank);
+    add(knurled(.33,.1),chrome,0,0,.05,this.crank);
+    add(butterfly(.6,.065,.115,.09),polished,0,0,.18,this.crank);
+    add(lathe([[.085,0],[.085,.03],[.06,.055],[0,.065]],32).rotateX(Math.PI/2),polished,0,0,.3,this.crank);
 
-    // 出口與接球盤
-    add(new THREE.BoxGeometry(1.1,.62,.04),dark,0,.6,1.15);
-    const flap = add(new RoundedBoxGeometry(1.14,.1,.07,3,.02),chrome,0,.92,1.18); flap.castShadow=false;
-    add(new RoundedBoxGeometry(1.24,.07,.86,3,.03),chrome,0,.36,1.56);
-    add(new RoundedBoxGeometry(.07,.28,.86,3,.03),chrome,-.61,.47,1.56);
-    add(new RoundedBoxGeometry(.07,.28,.86,3,.03),chrome,.61,.47,1.56);
-    add(new RoundedBoxGeometry(1.24,.26,.07,3,.03),chrome,0,.46,1.98);
+    // 出口：拱形開口、掀蓋、一個弧形的鐵皮接球斗
+    const mouth = new THREE.Shape();
+    mouth.moveTo(-.36,-.2); mouth.lineTo(-.36,.02); mouth.absarc(0,.02,.36,Math.PI,0,true); mouth.lineTo(.36,-.2); mouth.closePath();
+    add(new THREE.ShapeGeometry(mouth,32),dark,0,.76,FRONT+.008).castShadow=false;
+    const arch = new THREE.Path().absarc(0,.02,.4,Math.PI,0,true);
+    add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(arch.getPoints(24).map(p=>new THREE.Vector3(p.x,p.y,0))),48,.026,10),polished,0,.76,FRONT+.012);
+    const bowl = new THREE.SphereGeometry(.46,48,24,0,Math.PI,Math.PI/2,Math.PI/2);
+    bowl.scale(1,.66,1.2);
+    const scoop = new THREE.MeshStandardMaterial({...wornPaint("#d8d2c2","rgba(90,72,50,",4),metalness:1,roughness:.55,side:THREE.DoubleSide});
+    add(bowl,scoop,0,.66,FRONT+.01);
+    add(new THREE.TorusGeometry(.46,.024,12,64,Math.PI).rotateX(Math.PI/2).scale(1,1,1.2),polished,0,.66,FRONT+.01);
 
     // 玻璃球與鐵蓋
-    const glass = new THREE.MeshPhysicalMaterial({color:0xfaf3e2,transparent:true,opacity:.2,roughness:.1,metalness:0,clearcoat:.8,clearcoatRoughness:.15,envMapIntensity:1.7,depthWrite:false,side:THREE.FrontSide});
+    const glass = new THREE.MeshPhysicalMaterial({color:0xfaf3e2,transparent:true,opacity:.16,roughness:.06,metalness:0,clearcoat:1,clearcoatRoughness:.08,envMapIntensity:1.8,depthWrite:false,side:THREE.FrontSide});
     const globe = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R,64,48),glass);
     globe.position.copy(GLOBE_CENTER); globe.renderOrder = 5; m.add(globe);
     // 玻璃的反光與厚度感
-    const back = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.01,48,32),new THREE.MeshBasicMaterial({color:0xd8e4dc,transparent:true,opacity:.1,side:THREE.BackSide,depthWrite:false}));
+    const back = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.01,48,32),new THREE.MeshBasicMaterial({color:0xd8e4dc,transparent:true,opacity:.08,side:THREE.BackSide,depthWrite:false}));
     back.position.copy(GLOBE_CENTER); m.add(back);
-    const shine = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.015,32,24,3.7,.5,.75,.85),new THREE.MeshBasicMaterial({color:0xfff4dc,transparent:true,opacity:.26,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.015,32,24,3.7,.5,.75,.85),new THREE.MeshBasicMaterial({color:0xfff4dc,transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
     shine.position.copy(GLOBE_CENTER); shine.renderOrder=6; m.add(shine);
-    add(new THREE.CylinderGeometry(.74,.94,.14,56),enamel,0,5.36,0);
-    add(new THREE.TorusGeometry(.94,.055,16,60).rotateX(Math.PI/2),chrome,0,5.3,0);
-    add(new THREE.SphereGeometry(.74,48,20,0,Math.PI*2,0,Math.PI/2).scale(1,.5,1),enamel,0,5.43,0);
-    add(new THREE.CylinderGeometry(.11,.17,.14,24),chrome,0,5.85,0);
-    add(new THREE.SphereGeometry(.14,24,18),chrome,0,5.97,0);
+    // 蓋子壓在玻璃開口上：一圈唇邊、低低的圓頂、頂上帶鎖的銅頭
+    add(new THREE.CircleGeometry(.96,64).rotateX(Math.PI/2),new THREE.MeshStandardMaterial({color:0x4a1a12,roughness:.7}),0,5.3,0).castShadow=false;
+    add(lathe([[.9,5.3],[.96,5.3],[1,5.35],[.98,5.42],[.9,5.5],[.72,5.6],[.46,5.67],[.32,5.71],[.28,5.76],[.2,5.8],[0,5.81]]),enamel);
+    add(new THREE.TorusGeometry(.985,.025,12,96).rotateX(Math.PI/2),polished,0,5.36,0);
+    add(lathe([[.17,5.78],[.15,5.84],[.1,5.88],[.14,5.93],[.15,6],[.11,6.05],[.05,6.08],[0,6.085]],48),brass);
   }
 
   makeCapsule(color){
@@ -227,6 +249,8 @@ class Machine {
     const half = new THREE.SphereGeometry(CAP_R,28,14,0,Math.PI*2,0,Math.PI/2);
     const a = new THREE.Mesh(half,top); const b = new THREE.Mesh(half,bottom); b.rotation.x = Math.PI;
     a.castShadow = b.castShadow = true;
+    // 上下殼交接的那圈扣環，扭蛋才像扭蛋
+    a.add(new THREE.Mesh(new THREE.TorusGeometry(CAP_R,.012,8,40).rotateX(Math.PI/2),bottom));
     g.add(a,b); g.userData = {a,b};
     return g;
   }
@@ -315,7 +339,7 @@ class Machine {
   flyCoin(dt){
     const F=this.coinFlight; F.t+=dt;
     const k=smoother(span(F.t,0,.75)), near=span(F.t,.75,.95);
-    this.coin.position.set(THREE.MathUtils.lerp(1.8,1.05,k),THREE.MathUtils.lerp(.5,1.45,k)+Math.sin(k*Math.PI)*.35,THREE.MathUtils.lerp(1.5,1.32,k)-near*.3);
+    this.coin.position.set(THREE.MathUtils.lerp(COIN_HOME.x,SLOT.x,k),THREE.MathUtils.lerp(COIN_HOME.y,SLOT.y,k)+Math.sin(k*Math.PI)*.35,THREE.MathUtils.lerp(COIN_HOME.z,FRONT+.2,k)-near*.3);
     this.coin.rotation.y=(1-k)*Math.PI/2;
     this.coin.scale.setScalar(1+(1-k)*.7);
     if(F.t>=.95){
@@ -326,7 +350,7 @@ class Machine {
 
   restoreCoin(){
     this.coined=false; this.coin.visible=true;
-    this.coin.position.set(1.8,.5,1.5); this.coin.rotation.set(0,Math.PI/2,0); this.coin.scale.setScalar(1.7);
+    this.coin.position.copy(COIN_HOME); this.coin.rotation.set(0,Math.PI/2,0); this.coin.scale.setScalar(1.7);
   }
 
   homePose(){
@@ -339,7 +363,7 @@ class Machine {
     this.renderer.setSize(w,h);
     this.camera.aspect = w/h;
     // 窄畫面把鏡頭拉遠，機台才不會被切掉
-    this.fit = Math.max(1,.66/this.camera.aspect);
+    this.fit = Math.max(1,.74/this.camera.aspect);
     this.camera.updateProjectionMatrix();
   }
 
@@ -350,9 +374,9 @@ class Machine {
       this.timeline = {t:.5,picked,resolve,stage:{},from:null};
       this.yawTarget = 0;
       // 鏡頭走一條連續的曲線：轉把手時就開始慢慢靠近，中途不停、不急轉
-      const home=this.homePose(), near=new THREE.Vector3(0,1.55,7.4);
+      const home=this.homePose(), near=new THREE.Vector3(0,1.55,7.7);
       this.camPath=new THREE.CatmullRomCurve3([home,home.clone().lerp(near,.3).add(new THREE.Vector3(-1.1,.1,0)),home.clone().lerp(near,.68).add(new THREE.Vector3(.7,-.5,0)),near]);
-      this.lookPath=new THREE.CatmullRomCurve3([this.homeLook.clone(),new THREE.Vector3(0,2.5,.3),new THREE.Vector3(0,1.5,1.2),new THREE.Vector3(0,1.46,2.5)]);
+      this.lookPath=new THREE.CatmullRomCurve3([this.homeLook.clone(),new THREE.Vector3(0,2.5,.3),new THREE.Vector3(0,1.5,1.2),OUT.clone()]);
     });
   }
 
@@ -399,8 +423,7 @@ class Machine {
     }
     if(t>=4){
       const k=smoother(span(t,4,5.05));
-      const to=new THREE.Vector3(0,1.46,2.5);
-      cap.mesh.position.lerpVectors(TRAY,to,k);
+      cap.mesh.position.lerpVectors(TRAY,OUT,k);
       cap.mesh.position.y+=Math.sin(k*Math.PI)*.18;
       cap.mesh.quaternion.slerp(new THREE.Quaternion(),.1);
     }
@@ -409,9 +432,9 @@ class Machine {
       const k=smoother(span(t,5.1,5.7));
       cap.mesh.userData.a.position.y=k*.46; cap.mesh.userData.a.rotation.x=-k*.4;
       cap.mesh.userData.b.position.y=-k*.46; cap.mesh.userData.b.rotation.x=Math.PI+k*.4;
-      this.flash.position.set(0,1.46,2.9); this.flash.intensity=Math.sin(span(t,5.1,6.6)*Math.PI)*34;
+      this.flash.position.set(0,OUT.y,OUT.z+.4); this.flash.intensity=Math.sin(span(t,5.1,6.6)*Math.PI)*12;
       this.note.visible=true;
-      this.note.position.set(0,1.46,2.55);
+      this.note.position.set(0,OUT.y,OUT.z+.05);
       this.note.scale.setScalar(.12+k*.5);
       this.note.rotation.set(0,0,0);
     }
@@ -450,7 +473,7 @@ class Machine {
     this.slotRing.visible=waiting&&!this.coined;
     this.crankRing.visible=waiting&&!!this.coined;
     this.slotRing.material.opacity=.45+.5*Math.sin(this.idle*(this.nudge?14:3.4))**2;
-    if(waiting&&!this.coined) this.coin.position.y=.5+Math.sin(this.idle*2)*.05;
+    if(waiting&&!this.coined) this.coin.position.y=COIN_HOME.y+Math.sin(this.idle*2)*.05;
     if(this.timeline || this.settle>0 || this.stir>0){
       this.physics(Math.min(dt,1/30));
       this.settle=Math.max(0,this.settle-dt);
