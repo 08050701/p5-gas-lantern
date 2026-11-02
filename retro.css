@@ -303,3 +303,13 @@ h2{line-height:1.5}
 .has-book .album-note,.has-book .album-nav,.has-book .text-link{position:relative;z-index:2;pointer-events:auto}
 .book3d{display:block;width:100%!important;height:100%!important;cursor:grab;touch-action:pan-y}
 .book3d:active{cursor:grabbing}
+
+/* 機器融進老照片的色調 */
+.machine-wrap canvas{filter:sepia(.24) saturate(.84) contrast(.94) brightness(.97)}
+/* 天燈飛走後，字一句一句慢慢出來 */
+.finale-end{animation:none}
+.finale-end h2,.finale-end p,.finale-line,.finale-end .action-row{animation:slowIn 2s ease both}
+.finale-end p{animation-delay:1.4s}
+.finale-line{display:block;margin:-8px 0 20px;font:600 clamp(20px,2vw,25px)/1.6 "LXGW WenKai TC","Noto Serif TC",serif;color:#f4e6c6;text-shadow:0 2px 8px #000;animation-delay:2.8s}
+.finale-end .action-row{animation-delay:4.2s}
+@keyframes slowIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}

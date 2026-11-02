@@ -25,13 +25,45 @@ function textPlane(w,h,draw,opts={}){
   return new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);
 }
 
+// 用了幾十年的烤漆：褪色、刮痕、掉漆露出底下的鐵和鏽
+function wornPaint(base,fade,seed=1){
+  const size=1024, c=document.createElement("canvas"), rough=document.createElement("canvas");
+  c.width=c.height=rough.width=rough.height=size;
+  const g=c.getContext("2d"), r=rough.getContext("2d");
+  let s=seed*9301; const rnd=()=>(s=(s*16807)%2147483647)/2147483647;
+  g.fillStyle=base; g.fillRect(0,0,size,size);
+  r.fillStyle="#9a9a9a"; r.fillRect(0,0,size,size);
+  const blot=(x,y,radius,color)=>{ const b=g.createRadialGradient(x,y,0,x,y,radius); b.addColorStop(0,color); b.addColorStop(1,color.replace(/[\d.]+\)$/,"0)")); g.fillStyle=b; g.fillRect(x-radius,y-radius,radius*2,radius*2); };
+  for(let i=0;i<70;i++) blot(rnd()*size,rnd()*size,40+rnd()*170,`${fade}${.05+rnd()*.12})`);
+  for(let i=0;i<40;i++) blot(rnd()*size,rnd()*size,30+rnd()*120,`rgba(30,16,8,${.05+rnd()*.14})`);
+  // 手摸最多、東西碰最多的地方在下緣和邊角，鏽往下流
+  for(let i=0;i<46;i++){
+    const x=rnd()*size, y=rnd()<.55?size*(.72+rnd()*.28):rnd()*size;
+    const w=4+rnd()*rnd()*34, h=3+rnd()*18;
+    g.fillStyle=rnd()<.5?"#6b3d1e":"#41301f"; r.fillStyle="#ececec";
+    g.beginPath(); r.beginPath();
+    for(let k=0;k<7;k++){ const a=k/7*6.28, q=.6+rnd()*.7; g.lineTo(x+Math.cos(a)*w*q,y+Math.sin(a)*h*q); r.lineTo(x+Math.cos(a)*w*q,y+Math.sin(a)*h*q); }
+    g.fill(); r.fill();
+    if(rnd()<.45){ g.strokeStyle=`rgba(96,50,22,${.12+rnd()*.2})`; g.lineWidth=1+rnd()*3; g.beginPath(); g.moveTo(x,y); g.lineTo(x+rnd()*5-2,y+24+rnd()*100); g.stroke(); }
+  }
+  for(let i=0;i<190;i++){
+    const x=rnd()*size, y=rnd()*size, a=rnd()*6.28, l=8+rnd()*rnd()*120;
+    g.strokeStyle=`rgba(232,214,180,${.05+rnd()*.17})`; r.strokeStyle="#d8d8d8";
+    g.lineWidth=r.lineWidth=.6+rnd();
+    g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l); g.stroke();
+    r.beginPath(); r.moveTo(x,y); r.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l); r.stroke();
+  }
+  const tex=(canvas,srgb)=>{ const t=new THREE.CanvasTexture(canvas); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; if(srgb) t.colorSpace=THREE.SRGBColorSpace; return t; };
+  return {map:tex(c,true),roughnessMap:tex(rough,false)};
+}
+
 // 掉漆、鏽斑貼在機身上：舊鐵殼的味道都在這層
 function agedDecal(w,h){
   return textPlane(w,h,(c,W,H)=>{
     c.clearRect(0,0,W,H);
     for(let i=0;i<34;i++){
       const x=Math.random()*W, edge=Math.random()<.65, y=edge?H*(.72+Math.random()*.28):Math.random()*H, r=4+Math.random()*(edge?38:15);
-      c.fillStyle = Math.random()<.6 ? `rgba(92,52,24,${.35+Math.random()*.45})` : `rgba(226,214,186,${.5+Math.random()*.4})`;
+      c.fillStyle = Math.random()<.6 ? `rgba(92,52,24,${.35+Math.random()*.45})` : `rgba(112,92,70,${.5+Math.random()*.4})`;
       c.beginPath();
       for(let a=0;a<6.3;a+=.7){ const q=r*(.6+Math.random()*.7); c.lineTo(x+Math.cos(a)*q,y+Math.sin(a)*q*.7); }
       c.closePath(); c.fill();
@@ -87,10 +119,10 @@ class Machine {
 
   buildMachine(){
     const m = this.rig;
-    const enamel = new THREE.MeshPhysicalMaterial({color:0x8f1d15,roughness:.38,metalness:.1,clearcoat:.55,clearcoatRoughness:.4});
-    const chrome = new THREE.MeshStandardMaterial({color:0xd8d2c2,metalness:1,roughness:.26});
+    const enamel = new THREE.MeshStandardMaterial({...wornPaint("#6f2017","rgba(120,74,50,",1),roughness:.92,metalness:.05});
+    const chrome = new THREE.MeshStandardMaterial({...wornPaint("#a39a84","rgba(70,52,34,",2),metalness:.82,roughness:.85});
     const dark = new THREE.MeshStandardMaterial({color:0x17100b,roughness:.9});
-    const wood = new THREE.MeshStandardMaterial({color:0x6d431f,roughness:.6});
+    const wood = new THREE.MeshStandardMaterial({...wornPaint("#5e3a1d","rgba(150,104,62,",3),roughness:.95});
     const add = (geo,mat,x=0,y=0,z=0,parent=m) => { const o=new THREE.Mesh(geo,mat); o.position.set(x,y,z); o.castShadow=true; o.receiveShadow=true; parent.add(o); return o; };
 
     // 柑仔店木櫃台
@@ -158,13 +190,13 @@ class Machine {
     add(new RoundedBoxGeometry(1.24,.26,.07,3,.03),chrome,0,.46,1.98);
 
     // 玻璃球與鐵蓋
-    const glass = new THREE.MeshPhysicalMaterial({color:0xffffff,transparent:true,opacity:.2,roughness:.04,metalness:0,clearcoat:1,clearcoatRoughness:.03,envMapIntensity:2.2,depthWrite:false,side:THREE.FrontSide});
+    const glass = new THREE.MeshPhysicalMaterial({color:0xf0e2c4,transparent:true,opacity:.24,roughness:.2,metalness:0,clearcoat:.5,clearcoatRoughness:.3,envMapIntensity:1.1,depthWrite:false,side:THREE.FrontSide});
     const globe = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R,64,48),glass);
     globe.position.copy(GLOBE_CENTER); globe.renderOrder = 5; m.add(globe);
     // 玻璃的反光與厚度感
     const back = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.01,48,32),new THREE.MeshBasicMaterial({color:0xd8e4dc,transparent:true,opacity:.1,side:THREE.BackSide,depthWrite:false}));
     back.position.copy(GLOBE_CENTER); m.add(back);
-    const shine = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.015,32,24,3.7,.5,.75,.85),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.34,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.015,32,24,3.7,.5,.75,.85),new THREE.MeshBasicMaterial({color:0xfff0d0,transparent:true,opacity:.14,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
     shine.position.copy(GLOBE_CENTER); shine.renderOrder=6; m.add(shine);
     add(new THREE.CylinderGeometry(.74,.94,.14,56),enamel,0,5.36,0);
     add(new THREE.TorusGeometry(.94,.055,16,60).rotateX(Math.PI/2),chrome,0,5.3,0);
@@ -175,8 +207,8 @@ class Machine {
 
   makeCapsule(color){
     const g = new THREE.Group();
-    const top = new THREE.MeshPhysicalMaterial({color,roughness:.28,clearcoat:.7,clearcoatRoughness:.25});
-    const bottom = new THREE.MeshPhysicalMaterial({color:0xf2e6cf,roughness:.32,clearcoat:.5});
+    const top = new THREE.MeshPhysicalMaterial({color,roughness:.5,clearcoat:.25,clearcoatRoughness:.5});
+    const bottom = new THREE.MeshPhysicalMaterial({color:0xe6d8bb,roughness:.5,clearcoat:.2});
     const half = new THREE.SphereGeometry(CAP_R,28,14,0,Math.PI*2,0,Math.PI/2);
     const a = new THREE.Mesh(half,top); const b = new THREE.Mesh(half,bottom); b.rotation.x = Math.PI;
     a.castShadow = b.castShadow = true;

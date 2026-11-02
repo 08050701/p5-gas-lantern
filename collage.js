@@ -17,6 +17,17 @@ const PHOTO_W = 520, PHOTO_H = 390;
 const PHOTO_SLOTS = [{x:66,y:76,tilt:-.022},{x:316,y:444,tilt:.018},{x:66,y:808,tilt:-.014}];
 // 上方有報頭、招牌的相紙，照片往下排
 const LOW_SLOTS = [{x:60,y:206,tilt:-.016},{x:320,y:548,tilt:.014},{x:60,y:878,tilt:-.012}];
+// 同一種相紙也有四種排法：左高右低、反過來、大照片在上、大照片在下
+const BIG_TOP = [{x:70,y:72,w:760,h:570,tilt:-.008},{x:66,y:700,w:370,h:278,tilt:-.02},{x:464,y:716,w:370,h:278,tilt:.018}];
+const BIG_LOW = [{x:66,y:70,w:370,h:278,tilt:.016},{x:464,y:62,w:370,h:278,tilt:-.018},{x:70,y:404,w:760,h:570,tilt:.008}];
+const mirrored = slots => slots.map(slot=>({...slot,x:900-slot.x-(slot.w||PHOTO_W),tilt:-slot.tilt}));
+const ROW_LAYOUT = {a:[170,1104],b:[455,1120],bTilt:-.07,title:[792,1008,1232],pog:[650,1190],note:[800,1100],big:true};
+const PHOTO_LAYOUTS = [
+  {slots:PHOTO_SLOTS,a:[752,216],b:[175,640],bTilt:-1.38,title:[748,868,1126],pog:[762,1192],note:[750,1168],cap:2},
+  {slots:mirrored(PHOTO_SLOTS),a:[148,216],b:[725,640],bTilt:1.38,title:[152,868,1126],pog:[138,1192],note:[150,1168],cap:2},
+  {slots:BIG_TOP,cap:0,...ROW_LAYOUT},
+  {slots:BIG_LOW,cap:2,...ROW_LAYOUT}
+];
 const CN_DAYS = "日一二三四五六";
 
 function font(c,weight,size,family=SERIF){ c.font = `${weight} ${size}px ${family}`; }
@@ -289,7 +300,7 @@ function tape(c,x,y,angle,color){
 }
 
 function oldPhoto(c,img,slot,kind,caption){
-  const w=PHOTO_W, h=PHOTO_H, border=20;
+  const w=slot.w||PHOTO_W, h=slot.h||PHOTO_H, border=20;
   rotated(c,slot.x+w/2,slot.y+h/2,slot.tilt,()=>{
     c.translate(-w/2,-h/2);
     c.save();
@@ -304,7 +315,7 @@ function oldPhoto(c,img,slot,kind,caption){
     if(caption){
       // 照相館常見的白字題字
       c.save(); c.fillStyle="#fff"; c.shadowColor="rgba(0,0,0,.8)"; c.shadowBlur=5;
-      font(c,700,27,HAND); c.textAlign="left"; c.textBaseline="alphabetic"; c.fillText(caption,16,h-16,w-32); c.restore();
+      font(c,700,w>600?32:27,HAND); c.textAlign="left"; c.textBaseline="alphabetic"; c.fillText(caption,16,h-16,w-32); c.restore();
     }
     if(kind==="album") photoCorners(c,w,h,border);
     if(kind==="postcard"||kind==="notebook"){ tape(c,w/2,-border,.03,"rgba(226,206,150,.78)"); }
@@ -444,7 +455,7 @@ function blessing(c,text,color,x,width,top,bottom,family=HAND,rule=""){
 }
 
 // ── 組起來 ─────────────────────────────
-async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
+async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,variant=0}){
   const date=new Date(), serial=String(Math.floor(Math.random()*90000)+10000);
   const roc=`${date.getFullYear()-1911}.${date.getMonth()+1}.${date.getDate()}`;
   const text=blessingText||"願您平安健康，天天歡喜。";
@@ -455,50 +466,61 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
   c.canvas.width=900; c.canvas.height=1500;
   const caption=`${scene.title}留影 ${roc}`;
 
+  const L=PHOTO_LAYOUTS[variant%4], flip=variant%2===1, mx=x=>flip?900-x:x;
+  const [ax,ay]=L.a, [bx,by]=L.b, [tx,t0,t1]=L.title, [px,py]=L.pog, [nx,ny]=L.note;
+  const lowSlots=flip?mirrored(LOW_SLOTS):LOW_SLOTS;
+  const place=(slots,kind)=>images.forEach((img,i)=>oldPhoto(c,img,slots[i],kind,i===(slots===L.slots?L.cap:2)?caption:""));
+  const ticket=()=>trainTicket(c,bx,by,L.bTilt,scene.title,serial);
+
   if(frame==="album"){
     paperAlbum(c);
-    images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"album",i===2?caption:""));
-    calendar(c,752,206,.05,date);
-    trainTicket(c,180,640,-1.38,scene.title,serial);
-    c.fillStyle=FRAME_STYLES.album.ink; fitVertical(c,scene.title,748,868,1126,50);
-    pogCard(c,762,1192,56,"好",.2);
+    place(L.slots,"album");
+    calendar(c,ax,ay,.05,date);
+    ticket();
+    c.fillStyle=FRAME_STYLES.album.ink; fitVertical(c,scene.title,tx,t0,t1,50);
+    pogCard(c,px,py,56,"好",.2);
     blessing(c,text,FRAME_STYLES.album.ink,86,750,1254,1466);
   }else if(frame==="postcard"){
     paperPostcard(c);
-    images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"postcard",i===2?caption:""));
-    stamp(c,758,214,.03,sceneImage,scene.title);
-    postmark(c,742,412,"#2b2b2b",scene.icon,roc);
-    calendar(c,166,640,-.06,date);
-    trainTicket(c,752,1030,1.42,scene.title,serial);
+    place(L.slots,"postcard");
+    stamp(c,ax,L.big?ay-10:214,.03,sceneImage,scene.title);
+    if(L.big){
+      ticket();
+      postmark(c,px+110,py-70,"#2b2b2b",scene.icon,roc);
+    }else{
+      postmark(c,ax-(flip?-16:10),412,"#2b2b2b",scene.icon,roc);
+      calendar(c,bx-(flip?-9:9),640,flip?.06:-.06,date);
+      trainTicket(c,mx(752),1030,flip?-1.42:1.42,scene.title,serial);
+    }
     c.fillStyle=FRAME_STYLES.postcard.ink; font(c,700,28); c.textAlign="left"; c.textBaseline="middle";
     c.fillText("明信片　POST CARD",74,1262);
     blessing(c,text,FRAME_STYLES.postcard.ink,74,750,1290,1464,HAND,"rgba(35,67,90,.55)");
   }else if(frame==="floral"){
     paperFloral(c);
-    images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"red",i===2?caption:""));
-    calendar(c,752,226,.05,date);
-    trainTicket(c,180,640,-1.38,scene.title,serial);
-    clothPatch(c,664,876,172,330);
-    c.fillStyle=FRAME_STYLES.floral.ink; fitVertical(c,scene.title,750,900,1182,44);
+    place(L.slots,"red");
+    calendar(c,ax,L.big?ay:226,.05,date);
+    ticket();
+    clothPatch(c,tx-86,t0+(L.big?-12:8),172,t1-t0+(L.big?24:72));
+    c.fillStyle=FRAME_STYLES.floral.ink; fitVertical(c,scene.title,tx+2,t0+32,t1+56-(L.big?56:0),44);
     clothPatch(c,52,1244,796,226);
     blessing(c,text,FRAME_STYLES.floral.ink,84,732,1262,1452);
   }else if(frame==="notebook"){
     paperNotebook(c);
-    images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"notebook",i===2?caption:""));
-    bookLabel(c,750,232,scene,roc);
-    pencil(c,170,650,-.5);
-    goldStar(c,100,520,44); goldStar(c,214,760,34,"#d8503f");
-    gradeStamp(c,750,1020,"甲上");
-    c.fillStyle="#c9281e"; font(c,700,34,HAND); c.textAlign="center"; c.textBaseline="middle"; c.fillText("老師評語",750,1168);
+    place(L.slots,"notebook");
+    bookLabel(c,ax-(flip?-2:2),L.big?ay:232,scene,roc);
+    pencil(c,bx,by+10,L.big?-.12:(flip?.5:-.5));
+    goldStar(c,mx(100),L.big?1010:520,44); goldStar(c,mx(214),L.big?1240:760,34,"#d8503f");
+    gradeStamp(c,L.big?px:nx,L.big?py:1020,"甲上");
+    c.fillStyle="#c9281e"; font(c,700,34,HAND); c.textAlign="center"; c.textBaseline="middle"; c.fillText("老師評語",nx,ny);
     blessing(c,text,FRAME_STYLES.notebook.ink,78,750,1250,1464);
   }else if(frame==="news"){
     paperNews(c);
     newsMasthead(c,date,roc,serial);
     const story=`${scene.title}${scene.poem}本報記者今日前往採訪，鄉親都說日子平安最要緊，大家歡歡喜喜合照留念。`;
-    newsText(c,story,616,206,240,330);
-    newsText(c,story,44,560,258,306);
-    newsText(c,story,616,1006,240,270);
-    images.forEach((img,i)=>oldPhoto(c,img,LOW_SLOTS[i],"news",i===2?caption:""));
+    newsText(c,story,flip?44:616,206,240,330);
+    newsText(c,story,flip?598:44,560,258,306);
+    newsText(c,story,flip?44:616,1006,240,270);
+    place(lowSlots,"news");
     c.fillStyle="#1d1a15"; c.fillRect(44,1300,812,4);
     font(c,700,27); c.textAlign="left"; c.textBaseline="middle"; c.fillText(`本報訊　${scene.icon}傳來好消息：`,50,1330);
     blessing(c,text,FRAME_STYLES.news.ink,50,800,1350,1476,SERIF);
@@ -507,28 +529,28 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText}){
     c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,74); c.textAlign="center"; c.textBaseline="middle"; c.fillText("同 窗 留 念",450,96);
     font(c,700,26); c.fillText(`民國${date.getFullYear()-1911}年　願望國民學校　第${Number(serial.slice(0,2))}屆畢業`,450,162);
     schoolBadge(c,110,104,52,"願");
-    images.forEach((img,i)=>oldPhoto(c,img,LOW_SLOTS[i],"plain",i===2?caption:""));
-    c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,46,HAND); verticalText(c,"勿忘影中人",738,372,50);
-    verticalText(c,"友誼長存",170,738,50);
-    fitVertical(c,scene.title,742,984,1284,46);
+    place(lowSlots,"plain");
+    c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,46,HAND); verticalText(c,"勿忘影中人",mx(738),372,50);
+    verticalText(c,"友誼長存",mx(170),738,50);
+    fitVertical(c,scene.title,mx(742),984,1284,46);
     c.save(); c.shadowColor="rgba(0,0,0,.5)"; c.shadowBlur=12; c.fillStyle="#f4ead2"; c.fillRect(60,1300,780,170); c.restore();
     blessing(c,text,"#26334a",84,732,1306,1464);
   }else if(frame==="theater"){
     paperTheater(c);
     paintedTitle(c,scene.title);
-    images.forEach((img,i)=>oldPhoto(c,img,LOW_SLOTS[i],"plain",i===2?caption:""));
-    goldStar(c,740,270,40,"#ffd95c"); goldStar(c,800,360,28,"#ffd95c"); goldStar(c,696,392,22,"#ffd95c");
-    c.fillStyle="#f3e6cc"; font(c,700,32,HAND); verticalText(c,"轉來坐影業",170,738,42);
-    movieTicket(c,742,1064,-.12,serial);
-    c.fillStyle="#f3e6cc"; font(c,700,26); c.textAlign="center"; c.textBaseline="middle"; c.fillText("全 省 聯 映",742,1190);
+    place(lowSlots,"plain");
+    goldStar(c,mx(740),270,40,"#ffd95c"); goldStar(c,mx(800),360,28,"#ffd95c"); goldStar(c,mx(696),392,22,"#ffd95c");
+    c.fillStyle="#f3e6cc"; font(c,700,32,HAND); verticalText(c,"轉來坐影業",mx(170),738,42);
+    movieTicket(c,mx(742),1064,flip?.12:-.12,serial);
+    c.fillStyle="#f3e6cc"; font(c,700,26); c.textAlign="center"; c.textBaseline="middle"; c.fillText("全 省 聯 映",mx(742),1190);
     blessing(c,text,FRAME_STYLES.theater.ink,76,748,1300,1470);
   }else{
     paperRed(c);
-    images.forEach((img,i)=>oldPhoto(c,img,PHOTO_SLOTS[i],"red",i===2?caption:""));
-    calendar(c,752,226,.05,date);
-    fuDiamond(c,170,640,190);
-    c.fillStyle=FRAME_STYLES.red.ink; fitVertical(c,scene.title,748,868,1126,50);
-    pogCard(c,762,1192,56,"福",-.2);
+    place(L.slots,"red");
+    calendar(c,ax,L.big?ay:226,.05,date);
+    if(L.big) fuDiamond(c,bx,by,170); else fuDiamond(c,bx-5,640,190);
+    c.fillStyle=FRAME_STYLES.red.ink; fitVertical(c,scene.title,tx,t0,t1,50);
+    pogCard(c,px,py,56,"福",-.2);
     blessing(c,text,FRAME_STYLES.red.ink,78,744,1250,1452);
   }
 }

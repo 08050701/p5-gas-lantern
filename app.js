@@ -30,7 +30,7 @@ const SCENES = [
 
 const WISH_MAX = 300;
 const sceneImages = {};
-const state = { liveRun:0, screen:"gacha", scene:SCENES[0], wish:"", frame:"album", shots:[], collage:"", blessing:"", blessingPromise:null, stream:null, listening:false, busy:false, bgFront:"a" };
+const state = { variant:0, liveRun:0, screen:"gacha", scene:SCENES[0], wish:"", frame:"album", shots:[], collage:"", blessing:"", blessingPromise:null, stream:null, listening:false, busy:false, bgFront:"a" };
 const $ = (selector, root=document) => root.querySelector(selector);
 const $$ = (selector, root=document) => [...root.querySelectorAll(selector)];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -65,7 +65,7 @@ function init(){
 
 function bindEvents(){
   $("#musicBtn").addEventListener("click", toggleMusic);
-  document.addEventListener("pointerdown", autoStartMusic, {once:true});
+  ["touchend","click","keydown"].forEach(type => document.addEventListener(type, autoStartMusic, {capture:true}));
   $("#spinBtn").addEventListener("click", gachaStep);
   $("#spinAction").addEventListener("click", gachaStep);
   $("#albumBtn").addEventListener("click", askAlbum);
@@ -93,10 +93,13 @@ function bindEvents(){
   window.addEventListener("pagehide", stopCamera);
 }
 
-// 瀏覽器規定要先按一下才能出聲，所以第一次點畫面就開始放
+// 瀏覽器規定要先按一下才能出聲，所以第一次點畫面就開始放；之後每次碰畫面都順手喚醒，
+// 手機用過麥克風或切回來時，聲音才接得回來
 function autoStartMusic(event){
-  if(event.target.closest("#musicBtn")) return;
-  RetroMusic.start().then(renderMusicButton);
+  if(state.musicAsked || event.target.closest?.("#musicBtn")){ if(RetroMusic.isPlaying()) RetroMusic.unlock(); state.musicAsked=true; return; }
+  state.musicAsked=true;
+  RetroMusic.start();
+  renderMusicButton();
 }
 
 function toggleMusic(){
@@ -432,6 +435,7 @@ async function shootSequence(){
   if(state.busy || !state.stream || video.readyState < 2) return;
   state.busy = true;
   state.shots = [];
+  state.variant = (state.variant+1+Math.floor(Math.random()*3))%4; // 每次排法都不一樣
   renderShotSlots();
   $("#startShotsBtn").disabled = true;
   for(let shot=0;shot<3;shot++){
@@ -492,7 +496,7 @@ function renderShotSlots(){
 
 async function buildCollage(){
   const images = await Promise.all(state.shots.map(loadImage));
-  await renderCollage(ctx,{images,frame:state.frame,scene:state.scene,sceneImage:sceneImage(),blessingText:state.blessing});
+  await renderCollage(ctx,{images,frame:state.frame,scene:state.scene,sceneImage:sceneImage(),blessingText:state.blessing,variant:state.variant});
   return canvas.toDataURL("image/jpeg",.9);
 }
 
