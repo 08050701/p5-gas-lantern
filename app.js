@@ -474,7 +474,7 @@ function captureFrame(){
   out.width = 1200; out.height = 900;
   const c = out.getContext("2d");
   const scene = sceneImage();
-  if(scene && BgSwap.updateMask(video)){
+  if(scene && BgSwap.updateMask(video,true)){
     BgSwap.paint(c,video,scene,out.width,out.height);
     return out.toDataURL("image/jpeg",.92);
   }

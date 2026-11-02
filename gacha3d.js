@@ -32,23 +32,27 @@ function wornPaint(base,fade,seed=1){
   const g=c.getContext("2d"), r=rough.getContext("2d");
   let s=seed*9301; const rnd=()=>(s=(s*16807)%2147483647)/2147483647;
   g.fillStyle=base; g.fillRect(0,0,size,size);
-  r.fillStyle="#9a9a9a"; r.fillRect(0,0,size,size);
+  r.fillStyle="#6e6e6e"; r.fillRect(0,0,size,size);
   const blot=(x,y,radius,color)=>{ const b=g.createRadialGradient(x,y,0,x,y,radius); b.addColorStop(0,color); b.addColorStop(1,color.replace(/[\d.]+\)$/,"0)")); g.fillStyle=b; g.fillRect(x-radius,y-radius,radius*2,radius*2); };
-  for(let i=0;i<70;i++) blot(rnd()*size,rnd()*size,40+rnd()*170,`${fade}${.05+rnd()*.12})`);
-  for(let i=0;i<40;i++) blot(rnd()*size,rnd()*size,30+rnd()*120,`rgba(30,16,8,${.05+rnd()*.14})`);
+  for(let i=0;i<34;i++) blot(rnd()*size,rnd()*size,50+rnd()*170,`${fade}${.03+rnd()*.06})`);
+  for(let i=0;i<20;i++) blot(rnd()*size,rnd()*size,30+rnd()*120,`rgba(30,16,8,${.03+rnd()*.06})`);
+  if(seed===3) for(let i=0;i<150;i++){ // 木紋
+    const y=rnd()*size; g.strokeStyle=`rgba(${rnd()<.6?"40,22,10":"170,120,76"},${.05+rnd()*.13})`; g.lineWidth=1+rnd()*2.4;
+    g.beginPath(); g.moveTo(0,y); g.bezierCurveTo(size*.3,y+rnd()*16-8,size*.7,y+rnd()*16-8,size,y+rnd()*8-4); g.stroke();
+  }
   // 手摸最多、東西碰最多的地方在下緣和邊角，鏽往下流
-  for(let i=0;i<46;i++){
-    const x=rnd()*size, y=rnd()<.55?size*(.72+rnd()*.28):rnd()*size;
-    const w=4+rnd()*rnd()*34, h=3+rnd()*18;
+  for(let i=0;i<9;i++){
+    const x=rnd()*size, y=rnd()<.7?size*(.86+rnd()*.14):rnd()*size;
+    const w=2+rnd()*rnd()*12, h=2+rnd()*6;
     g.fillStyle=rnd()<.5?"#6b3d1e":"#41301f"; r.fillStyle="#ececec";
     g.beginPath(); r.beginPath();
     for(let k=0;k<7;k++){ const a=k/7*6.28, q=.6+rnd()*.7; g.lineTo(x+Math.cos(a)*w*q,y+Math.sin(a)*h*q); r.lineTo(x+Math.cos(a)*w*q,y+Math.sin(a)*h*q); }
     g.fill(); r.fill();
-    if(rnd()<.45){ g.strokeStyle=`rgba(96,50,22,${.12+rnd()*.2})`; g.lineWidth=1+rnd()*3; g.beginPath(); g.moveTo(x,y); g.lineTo(x+rnd()*5-2,y+24+rnd()*100); g.stroke(); }
+    if(rnd()<.12){ g.strokeStyle=`rgba(96,50,22,${.12+rnd()*.2})`; g.lineWidth=1+rnd()*3; g.beginPath(); g.moveTo(x,y); g.lineTo(x+rnd()*5-2,y+24+rnd()*100); g.stroke(); }
   }
-  for(let i=0;i<190;i++){
+  for(let i=0;i<120;i++){
     const x=rnd()*size, y=rnd()*size, a=rnd()*6.28, l=8+rnd()*rnd()*120;
-    g.strokeStyle=`rgba(232,214,180,${.05+rnd()*.17})`; r.strokeStyle="#d8d8d8";
+    g.strokeStyle=`rgba(232,214,180,${.03+rnd()*.09})`; r.strokeStyle="#d8d8d8";
     g.lineWidth=r.lineWidth=.6+rnd();
     g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l); g.stroke();
     r.beginPath(); r.moveTo(x,y); r.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l); r.stroke();
@@ -61,14 +65,18 @@ function wornPaint(base,fade,seed=1){
 function agedDecal(w,h){
   return textPlane(w,h,(c,W,H)=>{
     c.clearRect(0,0,W,H);
-    for(let i=0;i<34;i++){
-      const x=Math.random()*W, edge=Math.random()<.65, y=edge?H*(.72+Math.random()*.28):Math.random()*H, r=4+Math.random()*(edge?38:15);
-      c.fillStyle = Math.random()<.6 ? `rgba(92,52,24,${.35+Math.random()*.45})` : `rgba(112,92,70,${.5+Math.random()*.4})`;
+    // 機身的細金線框，老機器都是手工描的
+    c.strokeStyle="rgba(214,178,104,.85)"; c.lineWidth=5;
+    c.beginPath(); c.roundRect(20,20,W-40,H-40,34); c.stroke();
+    c.lineWidth=2; c.beginPath(); c.roundRect(34,34,W-68,H-68,26); c.stroke();
+    // 下緣幾處手碰出來的小磕痕
+    for(let i=0;i<9;i++){
+      const x=30+Math.random()*(W-60), y=H*(.9+Math.random()*.09), r=2+Math.random()*7;
+      c.fillStyle=`rgba(112,92,70,${.4+Math.random()*.4})`;
       c.beginPath();
       for(let a=0;a<6.3;a+=.7){ const q=r*(.6+Math.random()*.7); c.lineTo(x+Math.cos(a)*q,y+Math.sin(a)*q*.7); }
       c.closePath(); c.fill();
     }
-    for(let i=0;i<70;i++){ c.strokeStyle=`rgba(40,14,8,${Math.random()*.16})`; c.lineWidth=1; const x=Math.random()*W,y=Math.random()*H; c.beginPath(); c.moveTo(x,y); c.lineTo(x+Math.random()*60-30,y+Math.random()*12); c.stroke(); }
   },{transparent:true});
 }
 
@@ -119,10 +127,10 @@ class Machine {
 
   buildMachine(){
     const m = this.rig;
-    const enamel = new THREE.MeshStandardMaterial({...wornPaint("#6f2017","rgba(120,74,50,",1),roughness:.92,metalness:.05});
-    const chrome = new THREE.MeshStandardMaterial({...wornPaint("#a39a84","rgba(70,52,34,",2),metalness:.82,roughness:.85});
+    const enamel = new THREE.MeshPhysicalMaterial({...wornPaint("#8a2117","rgba(150,84,60,",1),roughness:.72,metalness:.06,clearcoat:.32,clearcoatRoughness:.42});
+    const chrome = new THREE.MeshStandardMaterial({...wornPaint("#cfc8b6","rgba(90,72,50,",2),metalness:.95,roughness:.58});
     const dark = new THREE.MeshStandardMaterial({color:0x17100b,roughness:.9});
-    const wood = new THREE.MeshStandardMaterial({...wornPaint("#5e3a1d","rgba(150,104,62,",3),roughness:.95});
+    const wood = new THREE.MeshStandardMaterial({...wornPaint("#6a4120","rgba(120,80,46,",3),roughness:.85});
     const add = (geo,mat,x=0,y=0,z=0,parent=m) => { const o=new THREE.Mesh(geo,mat); o.position.set(x,y,z); o.castShadow=true; o.receiveShadow=true; parent.add(o); return o; };
 
     // 柑仔店木櫃台
@@ -151,6 +159,13 @@ class Machine {
       [..."每次壹圓"].forEach((ch,i)=>c.fillText(ch,W/2,H*(.14+i*.24)));
     },{transparent:true});
     price.position.set(-1.05,1.45,1.158); m.add(price);
+
+    // 銘牌與螺絲：真機器的面板都是一片片鎖上去的
+    const screw=(x,y,z=1.17)=>{ const head=add(new THREE.CylinderGeometry(.035,.04,.02,14).rotateX(Math.PI/2),chrome,x,y,z); head.castShadow=false; const cut=add(new THREE.BoxGeometry(.055,.008,.006),dark,x,y,z+.012); cut.rotation.z=Math.random()*3; cut.castShadow=false; };
+    add(new RoundedBoxGeometry(1.5,.05,.04,2,.015),chrome,0,1.96,1.16).castShadow=false;
+    add(new RoundedBoxGeometry(1.5,.05,.04,2,.015),chrome,0,.86,1.16).castShadow=false;
+    [[-1.2,2.52],[1.2,2.52],[-1.2,.32],[1.2,.32],[1.05,1.82],[1.05,1.08]].forEach(([x,y])=>screw(x,y));
+    [-1.1,-.55,0,.55,1.1].forEach(x=>screw(x,.2,1.235));
 
     // 投幣孔
     add(new RoundedBoxGeometry(.4,.62,.06,3,.02),chrome,1.05,1.45,1.17);
@@ -190,13 +205,13 @@ class Machine {
     add(new RoundedBoxGeometry(1.24,.26,.07,3,.03),chrome,0,.46,1.98);
 
     // 玻璃球與鐵蓋
-    const glass = new THREE.MeshPhysicalMaterial({color:0xf0e2c4,transparent:true,opacity:.24,roughness:.2,metalness:0,clearcoat:.5,clearcoatRoughness:.3,envMapIntensity:1.1,depthWrite:false,side:THREE.FrontSide});
+    const glass = new THREE.MeshPhysicalMaterial({color:0xfaf3e2,transparent:true,opacity:.2,roughness:.1,metalness:0,clearcoat:.8,clearcoatRoughness:.15,envMapIntensity:1.7,depthWrite:false,side:THREE.FrontSide});
     const globe = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R,64,48),glass);
     globe.position.copy(GLOBE_CENTER); globe.renderOrder = 5; m.add(globe);
     // 玻璃的反光與厚度感
     const back = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.01,48,32),new THREE.MeshBasicMaterial({color:0xd8e4dc,transparent:true,opacity:.1,side:THREE.BackSide,depthWrite:false}));
     back.position.copy(GLOBE_CENTER); m.add(back);
-    const shine = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.015,32,24,3.7,.5,.75,.85),new THREE.MeshBasicMaterial({color:0xfff0d0,transparent:true,opacity:.14,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R+.015,32,24,3.7,.5,.75,.85),new THREE.MeshBasicMaterial({color:0xfff4dc,transparent:true,opacity:.26,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
     shine.position.copy(GLOBE_CENTER); shine.renderOrder=6; m.add(shine);
     add(new THREE.CylinderGeometry(.74,.94,.14,56),enamel,0,5.36,0);
     add(new THREE.TorusGeometry(.94,.055,16,60).rotateX(Math.PI/2),chrome,0,5.3,0);
@@ -207,8 +222,8 @@ class Machine {
 
   makeCapsule(color){
     const g = new THREE.Group();
-    const top = new THREE.MeshPhysicalMaterial({color,roughness:.5,clearcoat:.25,clearcoatRoughness:.5});
-    const bottom = new THREE.MeshPhysicalMaterial({color:0xe6d8bb,roughness:.5,clearcoat:.2});
+    const top = new THREE.MeshPhysicalMaterial({color,roughness:.36,clearcoat:.5,clearcoatRoughness:.3});
+    const bottom = new THREE.MeshPhysicalMaterial({color:0xeee2c8,roughness:.4,clearcoat:.35});
     const half = new THREE.SphereGeometry(CAP_R,28,14,0,Math.PI*2,0,Math.PI/2);
     const a = new THREE.Mesh(half,top); const b = new THREE.Mesh(half,bottom); b.rotation.x = Math.PI;
     a.castShadow = b.castShadow = true;

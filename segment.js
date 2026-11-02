@@ -15,31 +15,43 @@ const BgSwap = (() => {
     if(!loading) loading=(async()=>{
       const vision=await import(`${VISION_CDN}/vision_bundle.mjs`);
       const fileset=await vision.FilesetResolver.forVisionTasks(`${VISION_CDN}/wasm`);
-      segmenter=await vision.ImageSegmenter.createFromOptions(fileset,{
-        baseOptions:{ modelAssetPath:"assets/selfie_segmenter.tflite", delegate:"CPU" },
+      const options=delegate=>({
+        baseOptions:{ modelAssetPath:"assets/selfie_multiclass.tflite", delegate },
         runningMode:"VIDEO", outputConfidenceMasks:true, outputCategoryMask:false
       });
+      // 多類別模型分得出頭髮、皮膚、衣服、配件，比單純的人形模型準；有顯示晶片就用，手機才跟得上
+      segmenter=await vision.ImageSegmenter.createFromOptions(fileset,options("GPU"))
+        .catch(()=>vision.ImageSegmenter.createFromOptions(fileset,options("CPU")));
       return true;
     })().catch(error=>{ console.warn("去背載入失敗",error); loading=null; return false; });
     return loading;
   }
 
-  // 更新人物遮罩；邊緣用 smoothstep 收軟，頭髮比較不會有鋸齒
-  function updateMask(video){
+  // 更新人物遮罩：第一層是背景，其餘都算人。時間上做平滑，邊緣才不會一直抖
+  let previous=null, lastRun=0, gap=70;
+  function updateMask(video,force=false){
     if(!segmenter || video.readyState<2) return false;
-    const ts=Math.max(performance.now(),lastTs+1); lastTs=ts;
+    const now=performance.now();
+    if(!force && now-lastRun<gap && previous) return true;
+    lastRun=now;
+    const ts=Math.max(now,lastTs+1); lastTs=ts;
     const result=segmenter.segmentForVideo(video,ts);
     const masks=result.confidenceMasks;
-    const mask=masks[masks.length-1];
-    const {width,height}=mask, data=mask.getAsFloat32Array();
-    if(maskCanvas.width!==width){ maskCanvas.width=width; maskCanvas.height=height; }
+    const {width,height}=masks[0], background=masks[0].getAsFloat32Array();
+    if(maskCanvas.width!==width||!previous){ maskCanvas.width=width; maskCanvas.height=height; previous=new Float32Array(background.length); }
     const image=maskCtx.createImageData(width,height);
-    for(let i=0;i<data.length;i++){
-      const t=Math.min(1,Math.max(0,(data[i]-.35)/.4));
+    for(let i=0;i<background.length;i++){
+      const value=1-background[i];
+      // 動得大的地方直接跟上，幾乎沒動的地方才平均
+      const follow=Math.min(1,.45+Math.abs(value-previous[i])*2);
+      const mixed=previous[i]+(value-previous[i])*follow;
+      previous[i]=mixed;
+      const t=Math.min(1,Math.max(0,(mixed-.42)/.3));
       image.data[i*4+3]=255*t*t*(3-2*t);
     }
     maskCtx.putImageData(image,0,0);
     masks.forEach(m=>m.close());
+    gap=Math.max(70,(performance.now()-now)*2.5); // 慢的手機少算幾次，畫面才不會卡
     return true;
   }
 
@@ -94,6 +106,7 @@ const BgSwap = (() => {
     g.putImageData(image,0,0);
   }
   const soft=document.createElement("canvas"), softCtx=soft.getContext("2d");
+  const cast=document.createElement("canvas"), castCtx=cast.getContext("2d");
   const PERSON_SCALE=.9; // 人往後退一點，站在景裡，不是貼在鏡頭前
 
   function placed(c,W,H){
@@ -102,9 +115,10 @@ const BgSwap = (() => {
     c.scale(PERSON_SCALE,PERSON_SCALE);
   }
 
-  function fill(mode,color,W,H){
-    personCtx.globalCompositeOperation=mode;
+  function fill(mode,color,W,H,alpha=1){
+    personCtx.globalCompositeOperation=mode; personCtx.globalAlpha=alpha;
     personCtx.fillStyle=color; personCtx.fillRect(0,0,W,H);
+    personCtx.globalAlpha=1;
   }
 
   // iPhone 的 canvas 沒有 ctx.filter，調色全部用混合模式做
@@ -126,47 +140,51 @@ const BgSwap = (() => {
     const sw2=W>>1, sh2=H>>1;
     if(soft.width!==sw2){ soft.width=sw2; soft.height=sh2; }
     softCtx.drawImage(person,0,0,sw2,sh2);
-    personCtx.globalCompositeOperation="source-atop"; personCtx.globalAlpha=.55;
+    personCtx.globalCompositeOperation="source-atop"; personCtx.globalAlpha=.35;
     personCtx.drawImage(soft,0,0,W,H);
     personCtx.globalAlpha=1;
-    // 去掉現代色彩 → 亮度對齊背景 → 染上背景的底色 → 黑色抬到和老照片一樣灰
-    fill("saturation","#808080",W,H);
-    if(exposure<1) fill("multiply",`rgb(${[0,0,0].map(()=>Math.round(exposure*255)).join(",")})`,W,H);
+    // 人的衣服、膚色都留著，只收一點飽和、靠一點現場的光色，像老照片手工上色
+    fill("saturation","#808080",W,H,.2);
+    if(exposure<1){ const v=Math.round(exposure*255); fill("multiply",`rgb(${v},${v},${v})`,W,H); }
     else{ const v=Math.round((exposure-1)*255); fill("screen",`rgb(${v},${v},${v})`,W,H); }
-    fill("color",tone.color,W,H);
-    fill("lighten",tone.lift,W,H);
+    fill("color",tone.color,W,H,.12);
+    fill("lighten",tone.lift,W,H,.45);
     personCtx.globalCompositeOperation="destination-in";
     personCtx.save(); placed(personCtx,W,H);
     personCtx.drawImage(maskCanvas,sx*kx,sy*ky,sw*kx,sh*ky,0,0,W,H);
     personCtx.restore();
     // 現場的光落在人身上
-    personCtx.globalCompositeOperation="source-atop"; personCtx.globalAlpha=.28;
+    personCtx.globalCompositeOperation="source-atop"; personCtx.globalAlpha=.14;
     personCtx.imageSmoothingQuality="high";
     personCtx.drawImage(ambient(scene),0,0,W,H);
     personCtx.restore();
     if(frameCount++%20===0){
       const lum=meterPerson();
-      if(lum>.02) exposure=Math.min(1.25,Math.max(.55,exposure*Math.pow(Math.min(.5,Math.max(.3,tone.lum*.9))/lum,.6)));
+      if(lum>.02) exposure=Math.min(1.18,Math.max(.72,exposure*Math.pow(Math.min(.55,Math.max(.36,tone.lum))/lum,.5)));
     }
     ctx.save();
     // 人在地上的影子，落在背景上
-    ctx.globalCompositeOperation="multiply"; ctx.globalAlpha=.42;
-    ctx.drawImage(person,-W*.012,H*.014);
-    ctx.globalCompositeOperation="source-over"; ctx.globalAlpha=1;
+    const sw4=W>>3, sh4=H>>3;
+    if(cast.width!==sw4){ cast.width=sw4; cast.height=sh4; }
+    castCtx.globalCompositeOperation="copy"; castCtx.drawImage(person,0,0,sw4,sh4);
+    castCtx.globalCompositeOperation="source-in"; castCtx.fillStyle="#2a1b10"; castCtx.fillRect(0,0,sw4,sh4);
+    ctx.globalAlpha=.34; ctx.imageSmoothingQuality="high";
+    ctx.drawImage(cast,-W*.014,H*.016,W,H);
+    ctx.globalAlpha=1;
     ctx.drawImage(person,0,0);
     // 整張一起老：顆粒、四角暗角、幾點灰塵
-    ctx.globalCompositeOperation="overlay"; ctx.globalAlpha=.2;
+    ctx.globalCompositeOperation="overlay"; ctx.globalAlpha=.12;
     ctx.fillStyle=ctx.createPattern(grain,"repeat");
     const ox=Math.random()*220, oy=Math.random()*220;
     ctx.translate(ox,oy); ctx.fillRect(-ox,-oy,W,H); ctx.translate(-ox,-oy);
     ctx.globalCompositeOperation="source-over"; ctx.globalAlpha=1;
     const edge=ctx.createRadialGradient(W/2,H*.46,H*.42,W/2,H*.46,W*.72);
-    edge.addColorStop(0,"rgba(30,18,8,0)"); edge.addColorStop(1,"rgba(30,18,8,.42)");
+    edge.addColorStop(0,"rgba(30,18,8,0)"); edge.addColorStop(1,"rgba(30,18,8,.3)");
     ctx.fillStyle=edge; ctx.fillRect(0,0,W,H);
     ctx.fillStyle="rgba(250,240,220,.3)";
     for(let i=0;i<3;i++) ctx.fillRect(Math.random()*W,Math.random()*H,1+Math.random()*2,1+Math.random()*2);
     ctx.restore();
   }
 
-  return { load, updateMask, paint, isReady:()=>!!segmenter, maskCanvas };
+  return { load, updateMask, paint, isReady:()=>!!segmenter };
 })();

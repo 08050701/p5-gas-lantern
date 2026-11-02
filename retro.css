@@ -305,7 +305,7 @@ h2{line-height:1.5}
 .book3d:active{cursor:grabbing}
 
 /* 機器融進老照片的色調 */
-.machine-wrap canvas{filter:sepia(.24) saturate(.84) contrast(.94) brightness(.97)}
+.machine-wrap canvas{filter:sepia(.15) saturate(.9)}
 /* 天燈飛走後，字一句一句慢慢出來 */
 .finale-end{animation:none}
 .finale-end h2,.finale-end p,.finale-line,.finale-end .action-row{animation:slowIn 2s ease both}

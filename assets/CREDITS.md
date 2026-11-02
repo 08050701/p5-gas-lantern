@@ -27,4 +27,4 @@
 | taiwan-shimen.jpg | Scene of Sekimon in Heito, Formosa.jpg | 日治時期明信片 |
 | taiwan-jiaoban.jpg | Pushcar Railway Kappanzan Taiwan.jpg | 日治時期明信片 |
 
-照片經裁切與舊照色調處理。去背模型 selfie_segmenter.tflite 來自 Google MediaPipe。
+照片經裁切與舊照色調處理。去背模型 selfie_multiclass.tflite 來自 Google MediaPipe。
