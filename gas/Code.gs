@@ -32,7 +32,7 @@ function doPost(e) {
     if (body.action === "albumList") return jsonOut_(albumList_());
     if (body.action === "albumPage") return jsonOut_(albumPage_(body));
     const wish = String(body.wish || "").trim();
-    return jsonOut_({ ok: true, reply: getReply_(wish) });
+    return jsonOut_({ ok: true, reply: getReply_(wish, body.lang) });
   } catch (err) {
     return jsonOut_({ ok: false, reply: "", error: String(err && err.message || err) });
   }
@@ -62,7 +62,8 @@ function savePhoto_(body) {
   // 檔案維持私人；公開網頁只會透過不可猜測的 token 讀取。
   props.setProperty(PHOTO_KEY_PREFIX + token, JSON.stringify({
     fileId: file.getId(),
-    expiresAt: expiresAt
+    expiresAt: expiresAt,
+    lang: pickLang_(body.lang)
   }));
   ensurePhotoCleanupTrigger_();
   const claimUrl = `${ScriptApp.getService().getUrl()}?photo=${encodeURIComponent(token)}`;
@@ -144,10 +145,26 @@ function cleanupAlbum_() {
   });
 }
 
+// 介面三種語言；領取頁跟著拍照時選的語言
+const LANGS_ = ["zh", "ja", "en"];
+function pickLang_(lang) { return LANGS_.indexOf(lang) >= 0 ? lang : "zh"; }
+
+const PICKUP_TEXT_ = {
+  zh: { html: "zh-Hant", title: "領取願望拍貼", heading: "你的願望拍貼 ✦", sub: "長按照片或按下按鈕即可儲存", alt: "願望拍貼", download: "下載拍貼",
+        note: "照片儲存在活動主辦人的私人雲端空間，24 小時後自動刪除", missing: "找不到拍貼", badToken: "領取碼格式錯誤",
+        notFound: "找不到這張拍貼，請重新產生 QR Code", expired: "這張拍貼已超過 24 小時並自動刪除", unreadable: "照片目前無法讀取" },
+  ja: { html: "ja", title: "写真の受け取り", heading: "あなたの願いの写真 ✦", sub: "写真を長押しするか、ボタンを押して保存してください", alt: "願いの写真", download: "写真をダウンロード",
+        note: "写真は主催者の個人クラウドに保存され、24時間後に自動で削除されます", missing: "写真が見つかりません", badToken: "受け取りコードの形式が正しくありません",
+        notFound: "この写真は見つかりません。QRコードを作り直してください", expired: "24時間を過ぎたため、この写真は自動で削除されました", unreadable: "今は写真を読み込めません" },
+  en: { html: "en", title: "Pick up your wish photo", heading: "Your wish photo ✦", sub: "Press and hold the photo, or tap the button to save it", alt: "Wish photo", download: "Download photo",
+        note: "Photos are kept in the organizer's private cloud storage and deleted after 24 hours", missing: "Photo not found", badToken: "This pickup code isn't valid",
+        notFound: "We couldn't find this photo. Please make a new QR code", expired: "This photo was deleted automatically after 24 hours", unreadable: "The photo can't be loaded right now" }
+};
+
 function renderPhotoPickupPage_(token) {
-  if (!/^[a-f0-9]{32}$/i.test(token)) return pickupErrorPage_("領取碼格式錯誤");
+  if (!/^[a-f0-9]{32}$/i.test(token)) return pickupErrorPage_("badToken", "zh");
   const rawRecord = PropertiesService.getScriptProperties().getProperty(PHOTO_KEY_PREFIX + token);
-  if (!rawRecord) return pickupErrorPage_("找不到這張拍貼，請重新產生 QR Code");
+  if (!rawRecord) return pickupErrorPage_("notFound", "zh");
 
   let record;
   try {
@@ -155,10 +172,12 @@ function renderPhotoPickupPage_(token) {
   } catch (err) {
     record = { fileId: rawRecord, expiresAt: 0 };
   }
-  if (!record.fileId) return pickupErrorPage_("找不到這張拍貼");
+  const lang = pickLang_(record.lang);
+  const T = PICKUP_TEXT_[lang];
+  if (!record.fileId) return pickupErrorPage_("missing", lang);
   if (record.expiresAt && Date.now() >= Number(record.expiresAt)) {
     deletePhotoRecord_(token, record.fileId);
-    return pickupErrorPage_("這張拍貼已超過 24 小時並自動刪除");
+    return pickupErrorPage_("expired", lang);
   }
 
   try {
@@ -166,10 +185,10 @@ function renderPhotoPickupPage_(token) {
     const mimeType = String(blob.getContentType() || "image/jpeg");
     const dataUrl = `data:${mimeType};base64,${Utilities.base64Encode(blob.getBytes())}`;
     const html = `<!doctype html>
-      <html lang="zh-Hant"><head><meta charset="utf-8">
+      <html lang="${T.html}"><head><meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
       <meta name="robots" content="noindex,nofollow">
-      <title>領取願望拍貼</title>
+      <title>${T.title}</title>
       <style>
         *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
         background:radial-gradient(circle at top,#40325f,#11152f 68%);color:#fff;font-family:system-ui,"Microsoft JhengHei",sans-serif}
@@ -178,23 +197,23 @@ function renderPhotoPickupPage_(token) {
         a{display:block;margin-top:20px;padding:15px 20px;border-radius:18px;background:linear-gradient(135deg,#ffd96c,#ff77ad);color:#351b3d;text-decoration:none;font-size:22px;font-weight:800}
         small{display:block;margin-top:14px;color:#bac0df}
       </style></head><body><main>
-        <h1>你的願望拍貼 ✦</h1><p class="sub">長按照片或按下按鈕即可儲存</p>
-        <img class="photo" src="${dataUrl}" alt="願望拍貼">
-        <a href="${dataUrl}" download="wish-photo.${mimeType.indexOf("png") >= 0 ? "png" : "jpg"}">下載拍貼</a>
-        <small>照片儲存在活動主辦人的私人雲端空間，24 小時後自動刪除</small>
+        <h1>${T.heading}</h1><p class="sub">${T.sub}</p>
+        <img class="photo" src="${dataUrl}" alt="${T.alt}">
+        <a href="${dataUrl}" download="wish-photo.${mimeType.indexOf("png") >= 0 ? "png" : "jpg"}">${T.download}</a>
+        <small>${T.note}</small>
       </main></body></html>`;
-    return HtmlService.createHtmlOutput(html).setTitle("領取願望拍貼");
+    return HtmlService.createHtmlOutput(html).setTitle(T.title);
   } catch (err) {
-    return pickupErrorPage_("照片目前無法讀取");
+    return pickupErrorPage_("unreadable", lang);
   }
 }
 
-function pickupErrorPage_(message) {
-  const safe = String(message || "無法領取").replace(/[<>&\"']/g, "");
+function pickupErrorPage_(key, lang) {
+  const T = PICKUP_TEXT_[pickLang_(lang)];
   return HtmlService.createHtmlOutput(`<!doctype html><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#11152f;color:#fff;font-family:system-ui">
-    <main style="text-align:center;padding:28px"><h1>找不到拍貼</h1><p>${safe}</p></main></body>`);
+    <main style="text-align:center;padding:28px"><h1>${T.missing}</h1><p>${T[key]}</p></main></body>`);
 }
 
 function getPhotoFolder_() {
@@ -249,9 +268,22 @@ function jsonOut_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function getReply_(wish) {
+// 祝福用使用者選的介面語言回覆
+const BLESS_PROMPTS_ = {
+  zh: "你是溫暖、真誠的家人。請用繁體中文回覆使用者的願望，給一段貼心且具體的祝福；不要制式、不要說教、不要使用表情符號，也不要超過 100 個中文字。",
+  ja: "あなたは温かく誠実な家族です。ユーザーの願いに、自然な日本語で心のこもった具体的な励ましの言葉を返してください。決まり文句や説教、絵文字は使わず、100文字以内にしてください。願いが他の言語で書かれていても、必ず日本語で返事をしてください。",
+  en: "You are a warm, sincere family member. Reply to the user's wish in natural English with a heartfelt, specific blessing. No clichés, no lecturing, no emoji, and keep it under 60 words. Always reply in English, even if the wish is written in another language."
+};
+const EMPTY_WISH_ = {
+  zh: "願望已經收到，願你在接下來的日子裡，也能好好照顧自己並一步一步靠近它。",
+  ja: "願いはちゃんと受け取りました。これからの毎日、ご自分を大切にしながら、一歩ずつ近づいていけますように。",
+  en: "Your wish has been received. May you take good care of yourself and move a little closer to it every day."
+};
+
+function getReply_(wish, lang) {
+  lang = pickLang_(lang);
   const cleanWish = String(wish || "").trim().slice(0, 500);
-  if (!cleanWish) return "願望已經收到，願你在接下來的日子裡，也能好好照顧自己並一步一步靠近它。";
+  if (!cleanWish) return EMPTY_WISH_[lang];
 
   const props = PropertiesService.getScriptProperties();
   const apiKey = String(props.getProperty("OPENAI_API_KEY") || "").trim();
@@ -262,7 +294,7 @@ function getReply_(wish) {
     model: model,
     store: false,
     max_output_tokens: 180,
-    instructions: "你是溫暖、真誠的家人。請用繁體中文回覆使用者的願望，給一段貼心且具體的祝福；不要制式、不要說教、不要使用表情符號，也不要超過 100 個中文字。",
+    instructions: BLESS_PROMPTS_[lang],
     input: cleanWish
   };
   const res = UrlFetchApp.fetch(OPENAI_RESPONSES_URL, {

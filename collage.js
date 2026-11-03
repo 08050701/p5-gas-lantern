@@ -436,13 +436,7 @@ function blessing(c,text,color,x,width,top,bottom,family=HAND,rule=""){
   c.textAlign="left"; c.textBaseline="alphabetic";
   const leading=1.72;
   let size=50;
-  const measure=()=>{
-    font(c,700,size,family);
-    const lines=[]; let line="";
-    [...text].forEach(ch=>{ const t=line+ch; if(c.measureText(t).width>width && line && !"，。、！？；：」』）".includes(ch)){ lines.push(line); line=ch; } else line=t; });
-    if(line) lines.push(line);
-    return lines;
-  };
+  const measure=()=>{ font(c,700,size,family); return I18N.wrap(c,text,width); };
   let lines=measure();
   while(size>24 && lines.length*size*leading>bottom-top){ size-=2; lines=measure(); }
   const start=top+(bottom-top-lines.length*size*leading)/2+size*1.1;
@@ -458,13 +452,13 @@ function blessing(c,text,color,x,width,top,bottom,family=HAND,rule=""){
 async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,variant=0}){
   const date=new Date(), serial=String(Math.floor(Math.random()*90000)+10000);
   const roc=`${date.getFullYear()-1911}.${date.getMonth()+1}.${date.getDate()}`;
-  const text=blessingText||"願您平安健康，天天歡喜。";
+  const text=blessingText||I18N.t("fallbackBlessing");
   await Promise.allSettled([
-    document.fonts.load(`700 40px 'LXGW WenKai TC'`,text+scene.title+"留影"),
+    document.fonts.load(`700 40px 'LXGW WenKai TC'`,text+I18N.caption(scene,date)),
     document.fonts.load(`700 40px 'Noto Serif TC'`,scene.title+scene.poem+"民國普通車願望號票價壹圓福好運星期月年農曆明信片郵便國語作業簿班級地點日期老師評語甲上優本報記者今日前往採訪鄉親都說子平安最要緊大家歡喜合照留念轉來坐影業全省聯映日報日報中華星期第零售每份同窗留念畢業贈言勿忘影中人友誼長存本日放映戲全學校屆")
   ]);
   c.canvas.width=900; c.canvas.height=1500;
-  const caption=`${scene.title}留影 ${roc}`;
+  const caption=I18N.caption(scene,date);
 
   const L=PHOTO_LAYOUTS[variant%4], flip=variant%2===1, mx=x=>flip?900-x:x;
   const [ax,ay]=L.a, [bx,by]=L.b, [tx,t0,t1]=L.title, [px,py]=L.pog, [nx,ny]=L.note;

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&family=Noto+Serif+TC:wght@600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20261101-2">
-  <link rel="stylesheet" href="retro.css?v=20261102-19">
+  <link rel="stylesheet" href="retro.css?v=20261103-1">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -20,15 +20,16 @@
     <div class="world-shade"></div><div class="ambient" id="ambient"></div>
   </div>
   <header class="topbar">
-    <button class="brand" id="homeBtn" type="button" aria-label="回到首頁"><span class="brand-mark">✦</span><span><b>轉來坐</b><small>WISH PHOTO STUDIO</small></span></button>
+    <button class="brand" id="homeBtn" type="button" data-i18n-aria="home" aria-label="回到首頁"><span class="brand-mark">✦</span><span><b>轉來坐</b><small>WISH PHOTO STUDIO</small></span></button>
     <div class="progress" aria-hidden="true"><span class="is-active"></span><span></span><span></span><span></span></div>
-    <button class="music-toggle" id="musicBtn" type="button" aria-pressed="false">♪ 雨夜花：關</button>
+    <div class="top-actions"><div class="lang-pick" id="langPick"><button class="lang-btn" id="langBtn" type="button" aria-haspopup="true" aria-expanded="false" data-i18n-aria="langLabel" aria-label="語言"><span class="lang-icon" aria-hidden="true">文A</span><b>中文</b></button><div class="lang-menu" id="langMenu" hidden><button type="button" data-lang="zh" lang="zh-Hant">中文</button><button type="button" data-lang="ja" lang="ja">日本語</button><button type="button" data-lang="en" lang="en">English</button></div></div>
+    <button class="music-toggle" id="musicBtn" type="button" aria-pressed="false">♪ 雨夜花：關</button></div>
   </header>
-  <div class="browser-tip" id="browserTip" hidden><span>相機和麥克風可能不能用。請按右上角選單，選「用瀏覽器開啟」。</span><button id="browserTipClose" type="button" aria-label="關閉">×</button></div>
+  <div class="browser-tip" id="browserTip" hidden><span data-i18n="browserTip">相機和麥克風可能不能用。請按右上角選單，選「用瀏覽器開啟」。</span><button id="browserTipClose" type="button" data-i18n-aria="close" aria-label="關閉">×</button></div>
   <main id="app">
     <section class="screen is-active hero" data-screen="gacha">
-      <div class="hero-copy"><p class="eyebrow">今日限定 · 三連拍體驗</p><h1>轉一顆，<br>回到那個年代。</h1></div>
-      <div class="machine-wrap" id="machineWrap"><svg class="machine" viewBox="0 0 420 640" role="img" aria-label="舊式紅色鐵殼扭蛋機">
+      <div class="hero-copy"><p class="eyebrow" data-i18n="heroEyebrow">今日限定 · 三連拍體驗</p><h1 data-i18n-html="heroTitle">轉一顆，<br>回到那個年代。</h1></div>
+      <div class="machine-wrap" id="machineWrap"><svg class="machine" viewBox="0 0 420 640" role="img" data-i18n-aria="machine" aria-label="舊式紅色鐵殼扭蛋機">
 <defs>
 <radialGradient id="glass" cx=".36" cy=".3" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".2"/><stop offset=".7" stop-color="#d9e6dc" stop-opacity=".08"/><stop offset="1" stop-color="#3c4a40" stop-opacity=".42"/></radialGradient>
 <linearGradient id="enamel" x1="0" x2="1"><stop offset="0" stop-color="#651510"/><stop offset=".22" stop-color="#b7312a"/><stop offset=".5" stop-color="#c63a30"/><stop offset=".82" stop-color="#94211a"/><stop offset="1" stop-color="#55100c"/></linearGradient>
@@ -56,46 +57,46 @@
 <path d="M104 124a122 122 0 0 1 72-68" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round" opacity=".55"/>
 <path d="M110 40a150 40 0 0 1 200 0v14a150 30 0 0 0-200 0z" fill="url(#enamel)"/>
 <ellipse cx="210" cy="42" rx="102" ry="13" fill="url(#chrome)"/><path d="M160 34c8-20 92-20 100 0z" fill="url(#enamel)"/><circle cx="210" cy="14" r="11" fill="url(#chrome)" stroke="#3a3328"/>
-</svg><div class="machine-glow"></div><button class="crank" id="spinBtn" type="button" aria-label="轉動扭蛋機"><span class="crank-knob"></span></button><div class="capsule-pop" id="capsulePop"><i></i></div></div>
+</svg><div class="machine-glow"></div><button class="crank" id="spinBtn" type="button" data-i18n-aria="turnMachine" aria-label="轉動扭蛋機"><span class="crank-knob"></span></button><div class="capsule-pop" id="capsulePop"><i></i></div></div>
       <button class="primary hero-action" id="spinAction" type="button"><span>按投幣孔，投壹圓</span></button>
     </section>
     <section class="screen reveal" data-screen="reveal">
-      <div class="reveal-orb"><span id="sceneIcon">☀</span></div><p class="eyebrow">你的場景已出現</p><h2 id="sceneTitle">晨光花園</h2><p class="scene-poem" id="scenePoem">今天的光，會替你把答案照亮。</p>
-      <div class="action-row"><button class="secondary" id="rerollBtn" type="button">再轉一顆</button><button class="primary" id="wishBtn" type="button">就去這裡</button></div>
+      <div class="reveal-orb"><span id="sceneIcon">☀</span></div><p class="eyebrow" data-i18n="revealEyebrow">你的場景已出現</p><h2 id="sceneTitle">晨光花園</h2><p class="scene-poem" id="scenePoem">今天的光，會替你把答案照亮。</p>
+      <div class="action-row"><button class="secondary" id="rerollBtn" type="button" data-i18n="reroll">再轉一顆</button><button class="primary" id="wishBtn" type="button" data-i18n="goHere">就去這裡</button></div>
     </section>
     <section class="screen wish" data-screen="wish">
-      <p class="eyebrow">STEP 02 · 留下一句話</p><h2>您有什麼願望？</h2>
-      <button class="mic" id="micBtn" type="button" aria-label="開始語音輸入"><span class="mic-ring"></span><span class="mic-icon">說話</span></button><p class="mic-status" id="micStatus">按一下，開始說</p><button class="text-link" id="restartBtn" type="button" hidden>講錯了，重講</button><button class="text-link" id="typeBtn" type="button">改用打字</button>
-      <div class="wish-preview" id="wishPreview" hidden><p id="wishText"></p><div class="inline-blessing"><span>AI 正在回應你的願望</span><p id="inlineBlessing">正在寫一段只給你的祝福…</p></div><div class="action-row"><button class="secondary" id="redoWishBtn" type="button">重講一次</button><button class="primary" id="toCameraBtn" type="button">去拍照</button></div></div>
+      <p class="eyebrow" data-i18n="wishEyebrow">STEP 02 · 留下一句話</p><h2 data-i18n="wishTitle">您有什麼願望？</h2>
+      <button class="mic" id="micBtn" type="button" data-i18n-aria="micAria" aria-label="開始語音輸入"><span class="mic-ring"></span><span class="mic-icon" data-i18n="micTalk">說話</span></button><p class="mic-status" id="micStatus" data-i18n="micIdle">按一下，開始說</p><button class="text-link" id="restartBtn" type="button" hidden data-i18n="restart">講錯了，重講</button><button class="text-link" id="typeBtn" type="button" data-i18n="typeInstead">改用打字</button>
+      <div class="wish-preview" id="wishPreview" hidden><p id="wishText"></p><div class="inline-blessing"><span data-i18n="aiAnswering">AI 正在回應你的願望</span><p id="inlineBlessing" data-i18n="aiWriting">正在寫一段只給你的祝福…</p></div><div class="action-row"><button class="secondary" id="redoWishBtn" type="button">重講一次</button><button class="primary" id="toCameraBtn" type="button" data-i18n="toCamera">去拍照</button></div></div>
     </section>
     <section class="screen camera" data-screen="camera">
-      <div class="camera-head"><div><p class="eyebrow">STEP 03 · 三連拍</p><h2>看鏡頭</h2></div><p><b id="shotCount">0</b> / 3</p></div>
-      <div class="camera-stage" id="cameraStage" data-frame="album"><video id="cameraVideo" autoplay muted playsinline></video><canvas id="liveCanvas" width="960" height="720"></canvas><div class="camera-placeholder" id="cameraPlaceholder"><span>相機預覽會出現在這裡</span></div><div class="pose-guide" id="poseGuide"></div><div class="countdown" id="countdown"></div><div class="flash" id="flash"></div></div>
-      <div class="pose-card"><div class="pose-head"><b id="poseTitle"></b><button class="pose-roll" id="poseRollBtn" type="button">換一組</button></div><ol id="poseList"></ol></div>
-      <div class="frame-picker" aria-label="相紙樣式"><button class="frame-chip is-active" data-frame="album" type="button"><i class="swatch-album"></i>老相本</button><button class="frame-chip" data-frame="postcard" type="button"><i class="swatch-postcard"></i>明信片</button><button class="frame-chip" data-frame="red" type="button"><i class="swatch-red"></i>紅紙</button><button class="frame-chip" data-frame="floral" type="button"><i class="swatch-floral"></i>花布</button><button class="frame-chip" data-frame="notebook" type="button"><i class="swatch-notebook"></i>作業簿</button><button class="frame-chip" data-frame="news" type="button"><i class="swatch-news"></i>老報紙</button><button class="frame-chip" data-frame="yearbook" type="button"><i class="swatch-yearbook"></i>畢業冊</button><button class="frame-chip" data-frame="theater" type="button"><i class="swatch-theater"></i>戲院</button></div>
-      <div class="shots" id="shots"><span></span><span></span><span></span></div><button class="primary shutter" id="startShotsBtn" type="button"><span class="shutter-dot"></span>開始拍三張</button><button class="text-link" id="skipBgBtn" type="button" hidden>先用原本的畫面拍</button><p class="camera-note" id="cameraNote">倒數 3 秒，連拍三張</p>
+      <div class="camera-head"><div><p class="eyebrow" data-i18n="cameraEyebrow">STEP 03 · 三連拍</p><h2 data-i18n="cameraTitle">看鏡頭</h2></div><p><b id="shotCount">0</b> / 3</p></div>
+      <div class="camera-stage" id="cameraStage" data-frame="album"><video id="cameraVideo" autoplay muted playsinline></video><canvas id="liveCanvas" width="960" height="720"></canvas><div class="camera-placeholder" id="cameraPlaceholder"><span data-i18n="cameraPlaceholder">相機預覽會出現在這裡</span></div><div class="pose-guide" id="poseGuide"></div><div class="countdown" id="countdown"></div><div class="flash" id="flash"></div></div>
+      <div class="pose-card"><div class="pose-head"><b id="poseTitle"></b><button class="pose-roll" id="poseRollBtn" type="button" data-i18n="poseRoll">換一組</button></div><ol id="poseList"></ol></div>
+      <div class="frame-picker" data-i18n-aria="framePicker" aria-label="相紙樣式"><button class="frame-chip is-active" data-frame="album" type="button"><i class="swatch-album"></i><span data-i18n="frameAlbum">老相本</span></button><button class="frame-chip" data-frame="postcard" type="button"><i class="swatch-postcard"></i><span data-i18n="framePostcard">明信片</span></button><button class="frame-chip" data-frame="red" type="button"><i class="swatch-red"></i><span data-i18n="frameRed">紅紙</span></button><button class="frame-chip" data-frame="floral" type="button"><i class="swatch-floral"></i><span data-i18n="frameFloral">花布</span></button><button class="frame-chip" data-frame="notebook" type="button"><i class="swatch-notebook"></i><span data-i18n="frameNotebook">作業簿</span></button><button class="frame-chip" data-frame="news" type="button"><i class="swatch-news"></i><span data-i18n="frameNews">老報紙</span></button><button class="frame-chip" data-frame="yearbook" type="button"><i class="swatch-yearbook"></i><span data-i18n="frameYearbook">畢業冊</span></button><button class="frame-chip" data-frame="theater" type="button"><i class="swatch-theater"></i><span data-i18n="frameTheater">戲院</span></button></div>
+      <div class="shots" id="shots"><span></span><span></span><span></span></div><button class="primary shutter" id="startShotsBtn" type="button"><span class="shutter-dot"></span><span data-i18n="startShots">開始拍三張</span></button><button class="text-link" id="skipBgBtn" type="button" hidden data-i18n="skipBg">先用原本的畫面拍</button><p class="camera-note" id="cameraNote" data-i18n="shotNote">倒數 3 秒，連拍三張</p>
     </section>
     <section class="screen review" data-screen="review">
-      <div class="strip-shell"><img id="collagePreview" alt="您的願望相片"></div>
-      <div class="review-copy"><p class="eyebrow">YOUR WISH STRIP</p><div class="blessing"><span>給您的祝福</span><p id="blessingText">正在寫祝福…</p></div><div class="action-row"><button class="secondary" id="retakeBtn" type="button">重拍</button><button class="primary" id="saveBtn" type="button">帶回家</button></div></div>
+      <div class="strip-shell"><img id="collagePreview" data-i18n-alt="reviewAlt" alt="您的願望相片"></div>
+      <div class="review-copy"><p class="eyebrow" data-i18n="reviewEyebrow">YOUR WISH STRIP</p><div class="blessing"><span data-i18n="blessLabel">給您的祝福</span><p id="blessingText">正在寫祝福…</p></div><div class="action-row"><button class="secondary" id="retakeBtn" type="button" data-i18n="retake">重拍</button><button class="primary" id="saveBtn" type="button" data-i18n="takeHome">帶回家</button></div></div>
     </section>
     <section class="screen pickup" data-screen="pickup">
-      <div class="pickup-visual"><img id="pickupPreview" alt="願望拍貼預覽"></div>
-      <div class="pickup-copy"><p class="eyebrow">READY TO TAKE HOME</p><h2>用手機掃一下</h2><div class="qr-wrap" id="qrMount"><div class="qr-loading">正在製作 QR Code…</div></div><p class="expiry">照片 24 小時後自動刪除</p><div class="action-row"><button class="secondary" id="downloadBtn" type="button">直接下載</button><button class="primary" id="finishBtn" type="button">放天燈</button></div></div>
+      <div class="pickup-visual"><img id="pickupPreview" data-i18n-alt="pickupAlt" alt="願望拍貼預覽"></div>
+      <div class="pickup-copy"><p class="eyebrow" data-i18n="pickupEyebrow">READY TO TAKE HOME</p><h2 data-i18n="pickupTitle">用手機掃一下</h2><div class="qr-wrap" id="qrMount"><div class="qr-loading" data-i18n="qrMaking">正在製作 QR Code…</div></div><p class="expiry" data-i18n="expiry">照片 24 小時後自動刪除</p><div class="action-row"><button class="secondary" id="downloadBtn" type="button" data-i18n="download">直接下載</button><button class="primary" id="finishBtn" type="button" data-i18n="toLantern">放天燈</button></div></div>
     </section>
-    <section class="screen finale" data-screen="finale"><div class="lantern-sky" id="lanternSky"></div><div class="finale-intro" id="finaleIntro"><h2><span>心裡的話，</span><span>寫在紙上了</span></h2><p><span>等一陣風來，</span><span>點起火，</span><span>讓它慢慢走</span></p></div><button class="primary" id="lightBtn" type="button">點燈</button><div class="finale-end" id="finaleEnd" hidden><h2>風，收下了您的話</h2><p id="finaleWish"></p><small class="finale-line"><span>它會慢慢飛，</span><span>飛到想念的人那裡</span></small><div class="action-row"><button class="secondary" id="againBtn" type="button">再來一次</button><button class="primary" id="albumBtn" type="button">翻開大家的相冊</button></div></div></section>
+    <section class="screen finale" data-screen="finale"><div class="lantern-sky" id="lanternSky"></div><div class="finale-intro" id="finaleIntro"><h2><span data-i18n="finaleA1">心裡的話，</span><span data-i18n="finaleA2">寫在紙上了</span></h2><p><span data-i18n="finaleB1">等一陣風來，</span><span data-i18n="finaleB2">點起火，</span><span data-i18n="finaleB3">讓它慢慢走</span></p></div><button class="primary" id="lightBtn" type="button" data-i18n="light">點燈</button><div class="finale-end" id="finaleEnd" hidden><h2 data-i18n="finaleEnd">風，收下了您的話</h2><p id="finaleWish"></p><small class="finale-line"><span data-i18n="finaleC1">它會慢慢飛，</span><span data-i18n="finaleC2">飛到想念的人那裡</span></small><div class="action-row"><button class="secondary" id="againBtn" type="button" data-i18n="again">再來一次</button><button class="primary" id="albumBtn" type="button" data-i18n="openAlbum">翻開大家的相冊</button></div></div></section>
     <section class="screen album" data-screen="album">
       <div class="book-stage" id="bookStage"></div>
       <div class="album-book" id="albumBook"><div class="album-side" id="albumLeft"></div><div class="album-side" id="albumRight"></div><div class="album-leaf" id="albumLeaf" hidden><div class="album-face" id="albumLeafFront"></div><div class="album-face is-back" id="albumLeafBack"></div></div></div>
       <div class="book-wish" id="bookWish"><p></p><p></p></div>
       <p class="album-note" id="albumNote"></p>
-      <div class="album-nav"><button class="secondary" id="albumPrev" type="button">上一頁</button><span id="albumCount"></span><button class="primary" id="albumNext" type="button">下一頁</button></div>
-      <button class="text-link" id="albumAgainBtn" type="button">回到扭蛋機</button>
+      <div class="album-nav"><button class="secondary" id="albumPrev" type="button" data-i18n="prevPage">上一頁</button><span id="albumCount"></span><button class="primary" id="albumNext" type="button" data-i18n="nextPage">下一頁</button></div>
+      <button class="text-link" id="albumAgainBtn" type="button" data-i18n="backToMachine">回到扭蛋機</button>
     </section>
   </main>
-  <dialog id="albumDialog"><div class="dialog-card"><h2>要放進大家的相冊嗎？</h2><p class="album-ask">放進去之後，來到這個網站的人都看得到您的<b>拍貼和願望</b>，保留 30 天。不放也可以看別人的。</p><div class="action-row"><button class="secondary" id="albumNo" type="button">不放，只看別人</button><button class="primary" id="albumYes" type="button">放進去</button></div></div></dialog>
-  <dialog id="wishDialog"><form method="dialog" class="dialog-card" id="wishForm"><button class="dialog-close" value="cancel" aria-label="關閉">×</button><p class="eyebrow">WRITE IT DOWN</p><h2>寫下您的願望</h2><textarea id="wishInput" maxlength="300" placeholder="例如：希望全家平安健康"></textarea><div class="dialog-foot"><span id="charCount">0 / 300</span><button class="primary" id="submitWishBtn" value="default">好了</button></div></form></dialog>
+  <dialog id="albumDialog"><div class="dialog-card"><h2 data-i18n="albumAsk">要放進大家的相冊嗎？</h2><p class="album-ask" data-i18n-html="albumAskText">放進去之後，來到這個網站的人都看得到您的<b>拍貼和願望</b>，保留 30 天。不放也可以看別人的。</p><div class="action-row"><button class="secondary" id="albumNo" type="button" data-i18n="albumNo">不放，只看別人</button><button class="primary" id="albumYes" type="button" data-i18n="albumYes">放進去</button></div></div></dialog>
+  <dialog id="wishDialog"><form method="dialog" class="dialog-card" id="wishForm"><button class="dialog-close" value="cancel" data-i18n-aria="close" aria-label="關閉">×</button><p class="eyebrow" data-i18n="writeEyebrow">WRITE IT DOWN</p><h2 data-i18n="writeTitle">寫下您的願望</h2><textarea id="wishInput" maxlength="300" data-i18n-placeholder="writePlaceholder" placeholder="例如：希望全家平安健康"></textarea><div class="dialog-foot"><span id="charCount">0 / 300</span><button class="primary" id="submitWishBtn" value="default" data-i18n="writeDone">好了</button></div></form></dialog>
   <canvas id="captureCanvas" hidden></canvas><div id="qrStage" aria-hidden="true"></div><div class="toast" id="toast" role="status"></div><div class="scene-wipe" id="sceneWipe" aria-hidden="true"></div>
-  <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@gh-pages/qrcode.min.js"></script><script src="music.js?v=20261102-19"></script><script src="segment.js?v=20261102-19"></script><script src="album.js?v=20261102-19"></script><script src="poses.js?v=20261102-19"></script><script src="collage.js?v=20261102-19"></script><script src="app.js?v=20261102-19"></script><script type="module" src="gacha3d.js?v=20261102-19"></script><script type="module" src="book3d.js?v=20261102-19"></script><script type="module" src="lantern3d.js?v=20261102-19"></script>
+  <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@gh-pages/qrcode.min.js"></script><script src="i18n.js?v=20261103-1"></script><script src="music.js?v=20261103-1"></script><script src="segment.js?v=20261103-1"></script><script src="album.js?v=20261103-1"></script><script src="poses.js?v=20261103-1"></script><script src="collage.js?v=20261103-1"></script><script src="app.js?v=20261103-1"></script><script type="module" src="gacha3d.js?v=20261103-1"></script><script type="module" src="book3d.js?v=20261103-1"></script><script type="module" src="lantern3d.js?v=20261103-1"></script>
 </body>
 </html>

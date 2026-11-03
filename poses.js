@@ -66,16 +66,16 @@ const PoseGuide = (() => {
 
   function show(mount,poseKey){
     const pose=POSES[poseKey];
-    mount.innerHTML=svg(pose)+pose.hands.map(([hand,x,y,size])=>`<span class="pose-hand" style="left:${x/4}%;top:${y/3}%;font-size:${size*.76}cqw">${hand}</span>`).join("")+`<b class="pose-name">${pose.label}</b>`;
+    mount.innerHTML=svg(pose)+pose.hands.map(([hand,x,y,size])=>`<span class="pose-hand" style="left:${x/4}%;top:${y/3}%;font-size:${size*.76}cqw">${hand}</span>`).join("")+`<b class="pose-name">${I18N.poseLabel(poseKey,pose.label)}</b>`;
   }
 
   // 像抽籤一樣：三十組都輪過一次才重來
   function next(){
     if(!bag.length) bag=POSE_SETS.map((_,i)=>i).sort(()=>Math.random()-.5);
     const index=bag.pop();
-    current={number:index+1,title:POSE_SETS[index][0],poses:POSE_SETS[index][1]};
+    current={number:index+1,title:()=>I18N.setTitle(index+1,POSE_SETS[index][0]),poses:POSE_SETS[index][1]};
     return current;
   }
 
-  return { next, show, current:()=>current, labels:keys=>keys.map(k=>POSES[k].label), total:POSE_SETS.length };
+  return { next, show, current:()=>current, labels:keys=>keys.map(k=>I18N.poseLabel(k,POSES[k].label)), total:POSE_SETS.length };
 })();

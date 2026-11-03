@@ -54,17 +54,24 @@ function guardInAppBrowser(){
 }
 
 function init(){
+  I18N.apply();
   guardInAppBrowser();
   setScene(state.scene, false);
   bindEvents();
   FlipAlbum.bind();
   renderGachaAction();
+  renderMusicButton();
   window.addEventListener("load",renderGachaAction);
   preloadScenes();
 }
 
 function bindEvents(){
   $("#musicBtn").addEventListener("click", toggleMusic);
+  $("#langBtn").addEventListener("click", toggleLangMenu);
+  $$("[data-lang]").forEach(button => button.addEventListener("click", () => { closeLangMenu(); I18N.set(button.dataset.lang); }));
+  document.addEventListener("click", event => { if(!event.target.closest("#langPick")) closeLangMenu(); });
+  document.addEventListener("keydown", event => { if(event.key==="Escape") closeLangMenu(); });
+  document.addEventListener("langchange", onLangChange);
   ["touchend","click","keydown"].forEach(type => document.addEventListener(type, autoStartMusic, {capture:true}));
   $("#spinBtn").addEventListener("click", gachaStep);
   $("#spinAction").addEventListener("click", gachaStep);
@@ -113,8 +120,46 @@ function toggleMusic(){
 
 function renderMusicButton(){
   const on = RetroMusic.isPlaying();
-  $("#musicBtn").textContent = `♪ 雨夜花：${on ? "開" : "關"}`;
+  // 手機上只留「♪ 開／關」，曲名藏起來
+  $("#musicBtn").innerHTML = `♪ <span class="music-name">${I18N.t("musicName")}</span>${I18N.t(on ? "musicOn" : "musicOff")}`;
   $("#musicBtn").setAttribute("aria-pressed", String(on));
+}
+
+function toggleLangMenu(){
+  const open = $("#langMenu").hidden;
+  $("#langMenu").hidden = !open;
+  $("#langBtn").setAttribute("aria-expanded",String(open));
+}
+
+function closeLangMenu(){
+  $("#langMenu").hidden = true;
+  $("#langBtn").setAttribute("aria-expanded","false");
+}
+
+// 換語言：畫面上正在顯示的字跟著換；祝福用新的語言重寫一次
+async function onLangChange(){
+  renderMusicButton();
+  renderGachaAction();
+  renderReveal();
+  if(state.wish){
+    $("#wishText").textContent = I18N.quote(state.wish);
+    $("#redoWishBtn").textContent = I18N.t(state.wishBy==="voice" ? "sayAgain" : "writeAgain");
+    $("#micStatus").textContent = I18N.t("gotIt");
+    $("#finaleWish").textContent = I18N.quote(state.wish);
+  }else if(!state.listening) $("#micStatus").textContent = I18N.t("micIdle");
+  $(".mic-icon").textContent = I18N.t(state.listening ? "micDone" : "micTalk");
+  if(PoseGuide.current()) renderPoses();
+  window.Book3D?.relabel?.();
+  if(state.listening) state.restartListening?.();
+  if(!state.blessing) $(".inline-blessing span").textContent = I18N.t("aiAnswering");
+  if(!state.wish || state.busy || !["wish","camera","review"].includes(state.screen)) return;
+  state.blessingPromise = requestBlessing();
+  if(state.screen!=="review") return;
+  await state.blessingPromise;
+  if(state.screen!=="review" || state.busy) return;
+  state.collage = await buildCollage();
+  $("#collagePreview").src = state.collage;
+  $("#pickupPreview").src = state.collage;
 }
 
 function preloadScenes(){
@@ -165,7 +210,7 @@ async function gachaStep(){
 
 function renderGachaAction(){
   const coined = window.Gacha3D?.coined;
-  $("#spinAction span").textContent = window.Gacha3D ? (coined ? "轉把手" : "按投幣孔，投壹圓") : "投幣，轉一下";
+  $("#spinAction span").textContent = I18N.t(window.Gacha3D ? (coined ? "spinTurn" : "spinCoin") : "spinFlat");
 }
 
 async function spinGacha(){
@@ -176,7 +221,7 @@ async function spinGacha(){
   $(".hero").classList.add("is-spinning");
   if(window.Gacha3D){
     // 背景隱藏時動畫會停，等太久就直接揭曉
-    await Promise.race([window.Gacha3D.spin(chosen.title),sleep(16000)]);
+    await Promise.race([window.Gacha3D.spin(I18N.scene(chosen).title),sleep(16000)]);
   }else{
     const machine = $("#machineWrap");
     machine.classList.add("is-spinning");
@@ -188,9 +233,7 @@ async function spinGacha(){
   wipe.classList.add("is-on");
   await sleep(520);
   setScene(chosen);
-  $("#sceneIcon").textContent = chosen.icon;
-  $("#sceneTitle").textContent = chosen.title;
-  $("#scenePoem").textContent = chosen.poem;
+  renderReveal();
   showScreen("reveal");
   $(".hero").classList.remove("is-spinning");
   window.Gacha3D?.reset();
@@ -198,6 +241,13 @@ async function spinGacha(){
   await sleep(80);
   wipe.classList.remove("is-on");
   state.busy = false;
+}
+
+function renderReveal(){
+  const scene = I18N.scene(state.scene);
+  $("#sceneIcon").textContent = scene.icon;
+  $("#sceneTitle").textContent = scene.title;
+  $("#scenePoem").textContent = scene.poem;
 }
 
 function rerollGacha(){
@@ -222,7 +272,7 @@ function submitTypedWish(event){
   if(submitter && submitter.value === "cancel") return;
   event.preventDefault();
   const wish = $("#wishInput").value.trim();
-  if(!wish){ showToast("請先寫下願望"); return; }
+  if(!wish){ showToast(I18N.t("writeFirst")); return; }
   acceptWish(wish);
   $("#wishDialog").close();
 }
@@ -230,12 +280,12 @@ function submitTypedWish(event){
 function acceptWish(wish,by="type"){
   state.wish = wish.slice(0,WISH_MAX);
   state.wishBy = by;
-  $("#redoWishBtn").textContent = by==="voice" ? "重講一次" : "重寫一次";
-  $("#wishText").textContent = `「${state.wish}」`;
+  $("#redoWishBtn").textContent = I18N.t(by==="voice" ? "sayAgain" : "writeAgain");
+  $("#wishText").textContent = I18N.quote(state.wish);
   $("#wishPreview").hidden = false;
   $("#micBtn").hidden = true;
   $("#typeBtn").hidden = true;
-  $("#micStatus").textContent = "收到了";
+  $("#micStatus").textContent = I18N.t("gotIt");
   state.blessingPromise = requestBlessing();
   BgSwap.load();
 }
@@ -246,7 +296,7 @@ function redoWish(){
   $("#wishPreview").hidden = true;
   $("#micBtn").hidden = false;
   $("#typeBtn").hidden = false;
-  $("#micStatus").textContent = "按一下，開始說";
+  $("#micStatus").textContent = I18N.t("micIdle");
   state.blessingPromise = null;
   if(voice){ state.wish = ""; startSpeech(); }
   else openWishDialog();
@@ -260,17 +310,18 @@ function startSpeech(){
   if(state.listening){ state.stopListening?.(); return; }
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!Recognition){
-    $("#micStatus").textContent = "這個瀏覽器無法使用語音，已切換成打字";
+    $("#micStatus").textContent = I18N.t("noVoice");
     openWishDialog();
     return;
   }
   const recognition = new Recognition();
-  recognition.lang = "zh-TW";
+  recognition.lang = I18N.speech;
   recognition.interimResults = true;
   recognition.continuous = true;
   const parts = [];
   let interim = "", silenceTimer = 0, maxTimer = 0, stopping = false;
-  const heard = () => (parts.join("")+interim).trim();
+  const gap = I18N.lang==="en" ? " " : "";
+  const heard = () => [...parts,interim].map(part=>part.trim()).filter(Boolean).join(gap);
   const keepWaiting = () => { clearTimeout(silenceTimer); silenceTimer = setTimeout(stop, heard() ? SILENCE_AFTER_SPEECH : SILENCE_NO_SPEECH); };
   const stop = () => { stopping = true; clearTimeout(silenceTimer); clearTimeout(maxTimer); try{ recognition.stop(); }catch(_){ finish(); } };
   const finish = () => {
@@ -278,21 +329,22 @@ function startSpeech(){
     state.stopListening = null;
     finishListening();
     if(heard()) acceptWish(heard(),"voice");
-    else $("#micStatus").textContent = "沒有聽清楚，再試一次或改用打字";
+    else $("#micStatus").textContent = I18N.t("notClear");
   };
-  // 講到一半想重來：把聽到的丟掉，斷線重連的流程會接著聽
+  // 講到一半想重來：把聽到的丟掉，斷線重連的流程會接著聽（換語言也走這條，重連時用新的語言）
   state.restartListening = () => {
     parts.length = 0; interim = "";
+    recognition.lang = I18N.speech;
     $("#restartBtn").hidden = true;
-    $("#micStatus").textContent = "好，請重新說一次";
+    $("#micStatus").textContent = I18N.t("sayAgainNow");
     keepWaiting();
     try{ recognition.abort(); }catch(_){}
   };
   state.stopListening = stop;
   state.listening = true;
   $("#micBtn").classList.add("is-listening");
-  $(".mic-icon").textContent = "說完了";
-  $("#micStatus").textContent = "慢慢說，說完按一下";
+  $(".mic-icon").textContent = I18N.t("micDone");
+  $("#micStatus").textContent = I18N.t("speakSlowly");
   recognition.onresult = event => {
     interim = "";
     for(let i=event.resultIndex;i<event.results.length;i++){
@@ -303,7 +355,7 @@ function startSpeech(){
       if(last && text.startsWith(last)) parts[parts.length-1] = text;
       else if(!last || !last.endsWith(text)) parts.push(text);
     }
-    $("#micStatus").textContent = heard() || "正在聽…";
+    $("#micStatus").textContent = heard() || I18N.t("listening");
     $("#restartBtn").hidden = !heard();
     keepWaiting();
   };
@@ -314,7 +366,7 @@ function startSpeech(){
     state.stopListening = null;
     finishListening();
     if(heard()){ acceptWish(heard(),"voice"); return; }
-    $("#micStatus").textContent = "沒有收到聲音，改用打字也可以";
+    $("#micStatus").textContent = I18N.t("noSound");
     openWishDialog();
   };
   // 瀏覽器自己斷線時接回去，繼續聽
@@ -334,42 +386,32 @@ function finishListening(){
   state.listening = false;
   $("#restartBtn").hidden = true;
   $("#micBtn").classList.remove("is-listening");
-  $(".mic-icon").textContent = "說話";
-}
-
-// AI 沒有回應時，至少依願望內容給一句貼近的話
-function localBlessing(wish){
-  const rules = [
-    [/健康|身體|病|腳|手術|平安|長壽/,["願您身體勇健，每天都吃得下、睡得好。","願病痛遠離，日子平平安安。"]],
-    [/孫|子女|兒|女兒|小孩|考試|讀書|學業/,["願孩子們順順利利，也常常回來看您。","願晚輩們都有好前途，您也放心歡喜。"]],
-    [/錢|財|發|生意|工作|賺/,["願您財源廣進，做什麼都順順利利。","願生意興隆，日子越過越好。"]],
-    [/家|團圓|回來|老伴|牽手/,["願全家人常常團圓，一起吃飯、一起笑。","願您和家人互相照顧，幸福長長久久。"]]
-  ];
-  const hit = rules.find(([pattern]) => pattern.test(wish));
-  const pool = hit ? hit[1] : ["願您平安健康，天天歡喜。","願您心想事成，日子甜甜蜜蜜。"];
-  return pool[Math.floor(Math.random()*pool.length)];
+  $(".mic-icon").textContent = I18N.t("micTalk");
 }
 
 async function requestBlessing(){
-  const wish = state.wish; // 重講之後，上一句的回覆晚到也不算數
+  const wish = state.wish, lang = I18N.lang; // 重講或換語言之後，上一次的回覆晚到也不算數
+  const stale = () => wish!==state.wish || lang!==I18N.lang;
   state.blessing = "";
-  $("#blessingText").textContent = "正在寫祝福…";
-  $("#inlineBlessing").textContent = "請稍等…";
-  $(".inline-blessing span").textContent = "正在寫祝福";
+  $("#blessingText").textContent = I18N.t("blessWriting");
+  $("#inlineBlessing").textContent = I18N.t("blessWait");
+  $(".inline-blessing span").textContent = I18N.t("blessWritingLabel");
   try{
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
-    const response = await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"bless",wish:state.wish}),signal:controller.signal});
+    const response = await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"bless",wish:state.wish,lang}),signal:controller.signal});
     clearTimeout(timer);
     const data = await response.json();
-    if(wish!==state.wish) return state.blessing;
-    if(!data.ok) throw new Error(data.error || "祝福暫時沒有送達");
-    state.blessing = String(data.reply || "").trim() || localBlessing(state.wish);
-    $(".inline-blessing span").textContent = "給您的祝福";
+    if(stale()) return state.blessing;
+    if(!data.ok) throw new Error(data.error || "no blessing");
+    const reply = String(data.reply || "").trim();
+    // AI 沒回應或回錯語言時，至少依願望內容給一句貼近的話
+    state.blessing = reply && I18N.fits(reply) ? reply : I18N.localBlessing(state.wish);
+    $(".inline-blessing span").textContent = I18N.t("blessLabel");
   }catch(error){
-    if(wish!==state.wish) return state.blessing;
-    state.blessing = localBlessing(state.wish);
-    $(".inline-blessing span").textContent = "給您的祝福";
+    if(stale()) return state.blessing;
+    state.blessing = I18N.localBlessing(state.wish);
+    $(".inline-blessing span").textContent = I18N.t("blessLabel");
   }
   $("#blessingText").textContent = state.blessing;
   $("#inlineBlessing").textContent = state.blessing;
@@ -385,10 +427,17 @@ async function enterCamera(){
 
 function rollPoses(){
   if(state.busy) return;
-  const set = PoseGuide.next();
-  $("#poseTitle").textContent = `${set.title}`;
-  $("#poseList").innerHTML = PoseGuide.labels(set.poses).map((label,i)=>`<li>${i+1}. ${label}</li>`).join("");
+  PoseGuide.next();
+  renderPoses();
   highlightPose(0);
+}
+
+function renderPoses(){
+  const set = PoseGuide.current();
+  const now = $$("#poseList li").findIndex(item => item.classList.contains("is-now"));
+  $("#poseTitle").textContent = set.title();
+  $("#poseList").innerHTML = PoseGuide.labels(set.poses).map((label,i)=>`<li>${i+1}. ${label}</li>`).join("");
+  if(now>=0) highlightPose(now);
 }
 
 function highlightPose(shot){
@@ -427,8 +476,8 @@ function startLivePreview(){
 // 背景模型有 25MB，網路慢要等一分多鐘：邊等邊看得到自己，等到了才拍；失敗就一直重試，要不要先拍由人決定
 async function prepareBackground(){
   const run = state.liveRun, note = $("#cameraNote"), skip = $("#skipBgBtn");
-  const progress = percent => { if(run === state.liveRun && !state.busy) note.textContent = `正在準備老照片背景 ${percent}%`; };
-  note.textContent = "正在準備老照片背景…";
+  const progress = percent => { if(run === state.liveRun && !state.busy) note.textContent = I18N.t("bgProgress",{p:percent}); };
+  note.textContent = I18N.t("bgPreparing");
   const offer = setTimeout(() => { if(run === state.liveRun) { skip.hidden = false; $("#startShotsBtn").hidden = true; } }, 30000);
   while(run === state.liveRun && !await BgSwap.load(progress)) await sleep(4000);
   clearTimeout(offer);
@@ -436,14 +485,14 @@ async function prepareBackground(){
   skip.hidden = true;
   $("#startShotsBtn").hidden = false;
   $("#startShotsBtn").disabled = false;
-  note.textContent = "倒數 3 秒，連拍三張";
+  note.textContent = I18N.t("shotNote");
 }
 
 async function startCamera(){
   stopCamera();
   $("#startShotsBtn").disabled = true;
   $("#cameraPlaceholder").style.display = "grid";
-  $("#cameraPlaceholder").innerHTML = "<span>正在開啟相機…</span>";
+  $("#cameraPlaceholder").innerHTML = `<span>${I18N.t("cameraOpening")}</span>`;
   try{
     state.stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:1280},height:{ideal:960}},audio:false});
     video.srcObject = state.stream;
@@ -452,11 +501,11 @@ async function startCamera(){
     startLivePreview();
     prepareBackground();
   }catch(_){
-    $("#cameraPlaceholder").innerHTML = "<span>無法開啟相機<br><small>請允許相機權限後重新整理</small></span>";
+    $("#cameraPlaceholder").innerHTML = `<span>${I18N.t("cameraFail")}</span>`;
     $("#startShotsBtn").disabled = true;
-    $("#cameraNote").textContent = "相機開不起來也沒關係";
+    $("#cameraNote").textContent = I18N.t("cameraFailNote");
     const skip = document.createElement("button");
-    skip.className = "text-link"; skip.type = "button"; skip.textContent = "不拍照，直接放天燈";
+    skip.className = "text-link"; skip.type = "button"; skip.textContent = I18N.t("skipToLantern");
     skip.addEventListener("click", () => showFinale());
     $("#cameraNote").appendChild(skip);
   }
@@ -486,7 +535,7 @@ async function shootSequence(){
   for(let shot=0;shot<3;shot++){
     highlightPose(shot);
     const label = PoseGuide.labels([PoseGuide.current().poses[shot]])[0];
-    $("#cameraNote").textContent = `第 ${shot+1} 張：${label}`;
+    $("#cameraNote").textContent = I18N.t("shotN",{n:shot+1,label});
     $("#countdown").textContent = "";
     await sleep(1700);
     for(let n=3;n>=1;n--){
@@ -502,7 +551,7 @@ async function shootSequence(){
     renderShotSlots();
     await sleep(850);
   }
-  $("#cameraNote").textContent = "拍好了，正在沖洗…";
+  $("#cameraNote").textContent = I18N.t("developing");
   if(state.blessingPromise) await Promise.race([state.blessingPromise,sleep(8000)]);
   state.collage = await buildCollage();
   $("#collagePreview").src = state.collage;
@@ -558,14 +607,14 @@ async function preparePickup(){
   state.busy=true;
   showScreen("pickup");
   const mount=$("#qrMount");
-  mount.innerHTML='<div class="qr-loading">照片上傳中…</div>';
+  mount.innerHTML=`<div class="qr-loading">${I18N.t("uploading")}</div>`;
   try{
-    const response=await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"savePhoto",imageData:state.collage,wish:state.wish.slice(0,WISH_MAX),scene:state.scene.key})});
+    const response=await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"savePhoto",imageData:state.collage,wish:state.wish.slice(0,WISH_MAX),scene:state.scene.key,lang:I18N.lang})});
     const data=await response.json();
-    if(!data.ok || !data.claimUrl) throw new Error(data.error || "沒有取得領取網址");
+    if(!data.ok || !data.claimUrl) throw new Error(data.error || "no claim url");
     renderQR(String(data.claimUrl),mount);
   }catch(error){
-    mount.innerHTML='<div class="qr-loading">這裡暫時掃不了<br>請按下方「直接下載」存到手機</div>';
+    mount.innerHTML=`<div class="qr-loading">${I18N.t("qrFail")}</div>`;
   }
   state.busy=false;
 }
@@ -593,11 +642,12 @@ async function downloadCollage(){
 async function showFinale(){
   showScreen("finale");
   $("#finaleIntro").hidden=false; $("#lightBtn").hidden=false; $("#finaleEnd").hidden=true;
-  $("#finaleWish").textContent=`「${state.wish}」`;
+  $("#finaleWish").textContent=I18N.quote(state.wish);
   checkAlbum();
   const photo=state.shots[0] ? await loadImage(state.shots[0]).catch(()=>null) : null;
-  await Promise.allSettled([document.fonts.load(`700 80px 'LXGW WenKai TC'`,state.wish+state.scene.title+"福平安健康團圓壽好運如意發財")]);
-  state.lantern3d=!!window.LanternSky?.open({wish:lanternWish(),photo,title:state.scene.title});
+  const title=I18N.scene(state.scene).title;
+  await Promise.allSettled([document.fonts.load(`700 80px 'LXGW WenKai TC'`,state.wish+title+"福平安健康團圓壽好運如意發財")]);
+  state.lantern3d=!!window.LanternSky?.open({wish:lanternWish(),photo,title});
 }
 
 // 天燈寫得下的長度
@@ -657,9 +707,9 @@ async function albumCall(body){
 async function enterAlbum(share){
   $("#albumDialog").close();
   showScreen("album");
-  $("#albumNote").textContent="正在翻開相冊…";
+  $("#albumNote").textContent=I18N.t("albumOpening");
   const today=new Date();
-  const mine={wish:state.wish,scene:state.scene.title,date:rocDate(today),src:state.collage};
+  const mine={wish:state.wish,scene:I18N.scene(state.scene).title,date:I18N.date(today),src:state.collage};
   const list=[{kind:"cover"},{kind:"inside"}];
   if(share) list.push(mine);
   const finished=()=>{
@@ -671,17 +721,17 @@ async function enterAlbum(share){
   let note="";
   try{
     if(share){
-      const saved=await albumCall({action:"albumAdd",imageData:albumImage(),wish:state.wish,scene:state.scene.title});
+      const saved=await albumCall({action:"albumAdd",imageData:albumImage(),wish:state.wish,scene:mine.scene});
       if(saved.id) mine.id=saved.id;
-      else note=saved.error ? `這次沒放進去：${saved.error}` : "相冊還沒開通，這一頁只有您看得到";
+      else note=saved.error ? I18N.t("albumNotAdded",{e:saved.error}) : I18N.t("albumOnlyYou");
     }
     const data=await albumCall({action:"albumList"});
-    if(!Array.isArray(data.pages)) throw new Error("相冊還沒開通");
-    const others=data.pages.filter(page=>page.id!==mine.id).map(page=>({id:page.id,wish:page.wish,scene:page.scene,date:rocDate(new Date(page.time))}));
+    if(!Array.isArray(data.pages)) throw new Error("album closed");
+    const others=data.pages.filter(page=>page.id!==mine.id).map(page=>({id:page.id,wish:page.wish,scene:page.scene,date:I18N.date(new Date(page.time))}));
     list.push(...others);
-    if(!others.length && !note) note="您是第一位，下一位就會看到您";
+    if(!others.length && !note) note=I18N.t("albumFirst");
   }catch(_){
-    note=note||"相冊還沒開通，暫時看不到其他人";
+    note=note||I18N.t("albumClosed");
   }
   $("#albumNote").textContent=note;
   openAlbum(finished(),async id=>(await albumCall({action:"albumPage",id})).imageData||"",true);
@@ -694,16 +744,12 @@ function openAlbum(pages,loader,keep){
   if(!ok) FlipAlbum.open(pages.filter(page=>page.kind!=="inside"&&page.kind!=="blank"),loader);
 }
 
-function rocDate(date){
-  return `民國${date.getFullYear()-1911}年${date.getMonth()+1}月${date.getDate()}日`;
-}
-
 function resetExperience(){
   stopCamera();
   Object.assign(state,{screen:"gacha",scene:SCENES[0],wish:"",frame:"album",shots:[],collage:"",blessing:"",blessingPromise:null,stream:null,listening:false,busy:false});
   $("#wishPreview").hidden=true; $("#wishText").textContent=""; $("#wishInput").value="";
-  $("#micBtn").hidden=false; $("#typeBtn").hidden=false; $("#micStatus").textContent="按一下，開始說";
-  $("#shotCount").textContent="0"; $("#blessingText").textContent="正在寫祝福…";
+  $("#micBtn").hidden=false; $("#typeBtn").hidden=false; $("#micStatus").textContent=I18N.t("micIdle");
+  $("#shotCount").textContent="0"; $("#blessingText").textContent=I18N.t("blessWriting");
   $$(".frame-chip").forEach((chip,index)=>chip.classList.toggle("is-active",index===0));
   $("#cameraStage").dataset.frame="album";
   renderShotSlots(); setScene(SCENES[0]); showScreen("gacha");

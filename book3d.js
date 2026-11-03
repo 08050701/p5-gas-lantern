@@ -1,6 +1,6 @@
 // 大家的相冊：一本放在桌上的 3D 書。紙會沿著弧線彎起來，手指拖到哪、紙就跟到哪。
 import * as THREE from "three";
-import { wornPaint, surfaceNormal, shopLight, shadeVertices } from "./surface.js?v=20261102-19";
+import { wornPaint, surfaceNormal, shopLight, shadeVertices } from "./surface.js?v=20261103-1";
 
 const W = 3, H = 5; // 跟拍貼一樣 3:5，照片剛好滿版不裁切
 const COLS = 48, ROWS = 12;
@@ -29,9 +29,13 @@ function drawCover(c,w,h){
   c.strokeStyle="#d8b65e"; c.lineWidth=7; c.strokeRect(36,36,w-72,h-72);
   c.lineWidth=2; c.strokeRect(52,52,w-104,h-104);
   c.fillStyle="#f0d68f"; c.textAlign="center"; c.textBaseline="middle";
-  c.font=`700 92px ${SERIF}`; c.fillText("大家的相冊",w/2,h*.42);
+  coverWords(c,w,h);
+}
+
+function coverWords(c,w,h){
+  c.font=`700 92px ${SERIF}`; c.fillText(I18N.t("bookTitle"),w/2,h*.42,w-170);
   c.font=`700 44px ${SERIF}`; c.fillText("轉 來 坐",w/2,h*.54);
-  c.font=`600 30px ${SERIF}`; c.fillText("按右邊，或用手把書翻開",w/2,h*.86);
+  c.font=`600 30px ${SERIF}`; c.fillText(I18N.t("bookHint"),w/2,h*.86,w-150);
 }
 
 // 燙金：只有金字和金線是金屬，布面不是
@@ -40,9 +44,7 @@ function drawFoil(c,w,h){
   c.strokeStyle="#fff"; c.fillStyle="#fff"; c.lineWidth=7; c.strokeRect(36,36,w-72,h-72);
   c.lineWidth=2; c.strokeRect(52,52,w-104,h-104);
   c.textAlign="center"; c.textBaseline="middle";
-  c.font=`700 92px ${SERIF}`; c.fillText("大家的相冊",w/2,h*.42);
-  c.font=`700 44px ${SERIF}`; c.fillText("轉 來 坐",w/2,h*.54);
-  c.font=`600 30px ${SERIF}`; c.fillText("按右邊，或用手把書翻開",w/2,h*.86);
+  coverWords(c,w,h);
 }
 
 // 書口：一張一張紙疊起來的細線
@@ -58,15 +60,15 @@ function pageEdges(){
 function drawInside(c,w,h){
   paperBase(c,w,h);
   c.fillStyle="#3a2a1c"; c.textAlign="center"; c.textBaseline="middle";
-  c.font=`700 52px ${HAND}`; c.fillText("翻翻看，",w/2,h*.44);
-  c.fillText("大家許了什麼願",w/2,h*.44+84);
+  c.font=`700 52px ${HAND}`; c.fillText(I18N.t("bookInside1"),w/2,h*.44,w-100);
+  c.fillText(I18N.t("bookInside2"),w/2,h*.44+84,w-100);
 }
 
 function drawEnd(c,w,h,note){
   paperBase(c,w,h);
   c.fillStyle="#3a2a1c"; c.textAlign="center"; c.textBaseline="middle";
-  c.font=`700 46px ${HAND}`; c.fillText("下一頁，留給下一位",w/2,h*.47);
-  if(note){ c.font=`600 30px ${SERIF}`; c.fillText(note,w/2,h*.47+78); }
+  c.font=`700 46px ${HAND}`; c.fillText(I18N.t("bookEnd"),w/2,h*.47,w-90);
+  if(note){ c.font=`600 30px ${SERIF}`; I18N.wrap(c,note,w-120).forEach((line,i)=>c.fillText(line,w/2,h*.47+78+i*44)); }
 }
 
 function drawEntry(c,w,h,page,img){
@@ -75,7 +77,7 @@ function drawEntry(c,w,h,page,img){
     const r=Math.max(w/img.naturalWidth,h/img.naturalHeight), iw=img.naturalWidth*r, ih=img.naturalHeight*r;
     c.drawImage(img,(w-iw)/2,(h-ih)/2,iw,ih);
   }else{
-    c.fillStyle="#6b5238"; c.font=`600 34px ${SERIF}`; c.textAlign="center"; c.textBaseline="middle"; c.fillText("翻開中…",w/2,h/2);
+    c.fillStyle="#6b5238"; c.font=`600 34px ${SERIF}`; c.textAlign="center"; c.textBaseline="middle"; c.fillText(I18N.t("bookLoading"),w/2,h/2);
   }
 }
 
@@ -300,14 +302,14 @@ class Book {
     const total=pages.filter(page=>page.kind!=="cover"&&page.kind!=="blank").length;
     const real=i=>i>0&&i<=total;
     let label;
-    if(left<0) label="封面";
-    else if(this.narrow) label=`第 ${this.focus<0||!real(right)?left:right} / ${total} 頁`;
-    else label=real(right)?`第 ${left}–${right} 頁，共 ${total} 頁`:`第 ${left} 頁，共 ${total} 頁`;
+    if(left<0) label=I18N.t("bookCover");
+    else if(this.narrow) label=I18N.t("bookPageOne",{a:this.focus<0||!real(right)?left:right,t:total});
+    else label=real(right)?I18N.t("bookPageTwo",{a:left,b:right,t:total}):I18N.t("bookPageLast",{a:left,t:total});
     document.getElementById("albumCount").textContent=label;
     document.getElementById("albumPrev").disabled=left<0;
     document.getElementById("albumNext").disabled=!this.canNext()&&(!this.narrow||this.focus>0||!real(right));
     const box=document.getElementById("bookWish"), [one,two]=box.children;
-    const wish=i=>pages[i]?.wish?`「${pages[i].wish}」`:"";
+    const wish=i=>pages[i]?.wish?I18N.quote(pages[i].wish):"";
     box.classList.remove("is-turning");
     box.style.width=`${2*(this.toScreen(W)-this.toScreen(0))}px`;
     box.classList.toggle("is-single",this.narrow);
@@ -400,6 +402,16 @@ class Book {
 
   close(){ this.renderer.setAnimationLoop(null); }
 
+  // 換語言：已經畫好的封面、內頁重畫一次
+  relabel(){
+    (this.pages||[]).forEach(page=>{
+      if(!page.canvas) return;
+      if(page.foil){ drawFoil(page.foil.image.getContext("2d"),...PAGE_PX); page.foil.needsUpdate=true; }
+      this.paint(page);
+    });
+    this.report();
+  }
+
   frame(){
     const dt=Math.min(this.clock.getDelta(),.12), T=this.turn;
     if(T){
@@ -451,6 +463,7 @@ window.Book3D={
     }
   },
   step(dir){ book?.step(dir); },
+  relabel(){ book?.relabel(); },
   close(){ book?.close(); },
   active:false
 };

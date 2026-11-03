@@ -1,7 +1,7 @@
 // 3D 扭蛋機：舊式紅色鐵殼機台。投幣、轉把手、扭蛋翻滾、掉出來、打開。
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { wornPaint, surfaceNormal, shopLight, shadeVertices, dent, agedPaper } from "./surface.js?v=20261102-19";
+import { wornPaint, surfaceNormal, shopLight, shadeVertices, dent, agedPaper } from "./surface.js?v=20261103-1";
 
 const GLOBE_CENTER = new THREE.Vector3(0,4.2,0);
 const GLOBE_R = 1.46;
@@ -380,15 +380,25 @@ class Machine {
   }
 
   makeNote(title){
-    const chars = [...title];
+    const chars = [...title], latin = I18N.latin(title);
     const note = textPlane(.5,1.5,(c,W,H)=>{
       c.fillStyle="#f6ecd6"; c.fillRect(0,0,W,H);
-      c.strokeStyle="#a8281f"; c.lineWidth=6; c.strokeRect(10,10,W-20,H-20);
+      c.strokeStyle="#a8281f"; c.lineWidth=W/18; c.strokeRect(W/11,W/11,W-W*2/11,H-W*2/11);
+      // 英文像書背那樣轉九十度，順著長邊寫
+      if(latin){
+        let size=Math.round(W*.4), lines=[];
+        for(;size>12;size-=2){ c.font=`700 ${size}px 'Noto Serif TC', serif`; lines=I18N.wrap(c,title,H*.8); if(lines.length*size*1.15<=W*.72) break; }
+        c.save(); c.translate(W/2,H/2); c.rotate(Math.PI/2);
+        c.fillStyle="#3a2a1c"; c.textAlign="center"; c.textBaseline="middle";
+        lines.forEach((line,i)=>c.fillText(line,0,(i-(lines.length-1)/2)*size*1.15));
+        c.restore();
+        return;
+      }
       // 字多就縮小，七個字也放得下
       const gap=Math.min(84,(H-44)/chars.length), size=Math.min(76,gap*.92);
       c.fillStyle="#3a2a1c"; c.font=`700 ${size}px 'Noto Serif TC', serif`; c.textAlign="center"; c.textBaseline="middle";
       chars.forEach((ch,i)=>c.fillText(ch,W/2,H/2+(i-(chars.length-1)/2)*gap));
-    });
+    },{px:latin?480:220});
     note.material.side = THREE.DoubleSide;
     return note;
   }

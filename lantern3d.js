@@ -1,6 +1,6 @@
 // 放天燈：夜空、山影、滿天天燈。紙上寫著自己的願望，點了火才飛上去。
 import * as THREE from "three";
-import { surfaceNormal } from "./surface.js?v=20261102-19";
+import { surfaceNormal } from "./surface.js?v=20261103-1";
 
 const clamp = (v,a=0,b=1) => Math.min(b,Math.max(a,v));
 const smooth = t => t*t*t*(t*(t*6-15)+10);
@@ -58,6 +58,21 @@ function writeColumns(c,text,x,y,w,h){
   });
 }
 
+// 英文橫著寫，一樣挑放得下的最大字
+function writeLines(c,text,x,y,w,h){
+  const leading=1.25;
+  let size=130, lines=[];
+  for(;size>=26;size-=2){
+    c.font=`700 ${size}px ${HAND}`;
+    lines=I18N.wrap(c,text,w);
+    if(lines.length*size*leading<=h && lines.every(line=>c.measureText(line).width<=w)) break;
+  }
+  const top=y+(h-lines.length*size*leading)/2;
+  c.textAlign="center"; c.textBaseline="middle"; c.fillStyle=INK;
+  lines.forEach((line,i)=>c.fillText(line,x+w/2,top+(i+.5)*size*leading));
+}
+const writeText=(c,text,...box)=>(I18N.latin(text)?writeLines:writeColumns)(c,text,...box);
+
 // 紙面攤平：四面紙接成一張，由左到右是 右、背、左、正。手工紙有纖維、有壓痕，接縫是兩層紙疊著糊起來的
 function paperTexture({wish,photo,title}){
   const W=512, H=1024, order=[1,2,3,0];
@@ -84,10 +99,10 @@ function paperTexture({wish,photo,title}){
       seam.addColorStop(0,"rgba(80,34,10,.42)"); seam.addColorStop(.035,"rgba(80,34,10,.2)"); seam.addColorStop(.04,"rgba(80,34,10,0)"); seam.addColorStop(.96,"rgba(80,34,10,0)"); seam.addColorStop(.965,"rgba(80,34,10,.2)"); seam.addColorStop(1,"rgba(80,34,10,.42)");
       c.fillStyle=seam; c.fillRect(x,0,W,H);
     });
-    writeColumns(c,wish,3*W+110,Math.round(H*.3),W-220,Math.round(H*.56));
+    writeText(c,wish,3*W+110,Math.round(H*.3),W-220,Math.round(H*.56));
     c.fillStyle=INK; c.font=`700 300px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
     c.fillText("福",W*1.5,H*.5);
-    writeColumns(c,title,2*W+120,170,W-240,H-300);
+    writeText(c,title,2*W+120,170,W-240,H-300);
     if(photo){
       const pw=W-120, ph=pw*.75, px=60, py=(H-ph)/2-30;
       c.save(); c.translate(px+pw/2,py+ph/2); c.rotate(-.03);
