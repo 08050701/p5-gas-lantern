@@ -1,6 +1,6 @@
 // 大家的相冊：一本放在桌上的 3D 書。紙會沿著弧線彎起來，手指拖到哪、紙就跟到哪。
 import * as THREE from "three";
-import { wornPaint, surfaceNormal, shopLight, shadeVertices } from "./surface.js?v=20261103-1";
+import { wornPaint, surfaceNormal, shopLight, shadeVertices } from "./surface.js?v=20261103-2";
 
 const W = 3, H = 5; // 跟拍貼一樣 3:5，照片剛好滿版不裁切
 const COLS = 48, ROWS = 12;
@@ -34,7 +34,7 @@ function drawCover(c,w,h){
 
 function coverWords(c,w,h){
   c.font=`700 92px ${SERIF}`; c.fillText(I18N.t("bookTitle"),w/2,h*.42,w-170);
-  c.font=`700 44px ${SERIF}`; c.fillText("轉 來 坐",w/2,h*.54);
+  c.font=`700 44px ${SERIF}`; c.fillText(I18N.t("brandSign"),w/2,h*.54,w-170);
   c.font=`600 30px ${SERIF}`; c.fillText(I18N.t("bookHint"),w/2,h*.86,w-150);
 }
 

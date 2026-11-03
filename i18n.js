@@ -1,7 +1,6 @@
 "use strict";
 
-// 中文、日文、英文三種介面。語音辨識、AI 祝福、拍貼上的字也跟著換。
-// 老拍貼上的道具字（作業簿、日報、車票）是那個年代的東西，維持中文。
+// 中文、日文、英文三種介面。語音辨識、AI 祝福、拍貼上的道具字、扭蛋機和天燈也跟著換。
 const I18N = (() => {
   const LANGS = {
     zh:{ name:"中文", html:"zh-Hant", speech:"zh-TW" },
@@ -12,7 +11,7 @@ const I18N = (() => {
 
   // 每一句：[中文, 日文, 英文]
   const TEXT = {
-    pageTitle:["轉來坐｜老台灣願望拍貼","轉來坐｜昔の台湾 願いごと写真館","Zhuan Lai Tse | Old Taiwan Wish Photo Booth"],
+    pageTitle:["轉來坐｜老台灣願望拍貼","おかえり｜昔の台湾 願いごと写真館","Come Home | Old Taiwan Wish Photo Booth"],
     pageDesc:["轉一顆扭蛋，回到老台灣的風景裡拍照，帶走一句祝福。","ガチャを回して昔の台湾の風景で写真を撮り、あなたへの言葉を持ち帰りましょう。","Turn a capsule, step into old Taiwan for a photo, and take home a blessing."],
     langLabel:["語言","言語","Language"],
     home:["回到首頁","ホームに戻る","Back to start"],
@@ -131,8 +130,57 @@ const I18N = (() => {
     bookPageTwo:["第 {a}–{b} 頁，共 {t} 頁","{a}–{b} ページ（全 {t} ページ）","Pages {a}–{b} of {t}"],
     bookPageLast:["第 {a} 頁，共 {t} 頁","{a} ページ（全 {t} ページ）","Page {a} of {t}"],
     photoOf:["{scene}的拍貼","{scene}の写真","Photo at {scene}"],
-    fallbackBlessing:["願您平安健康，天天歡喜。","いつまでもお元気で、毎日笑顔でいられますように。","May you stay healthy and find joy in every day."]
+    fallbackBlessing:["願您平安健康，天天歡喜。","いつまでもお元気で、毎日笑顔でいられますように。","May you stay healthy and find joy in every day."],
+    // 舊版後端只會講中文，把要求附在願望後面，它也會照著用日文、英文回
+    aiHint:["","（請只用日文回覆，不要用中文）","（Please reply in English only. 請只用英文回覆，不要用中文）"],
+
+    brand:["轉來坐","おかえり","Come Home"],
+    brandSign:["轉 來 坐","お か え り","COME HOME"],
+    coinSign:["每次壹圓","一回一円","ONE COIN"],
+    coinFace:["壹","円","1"],
+    lanternFu:["福","福","LUCK"],
+
+    // 拍貼上的老道具
+    pBook:["國語作業簿","こくごノート","COMPOSITION"],
+    pClass:["班級：願望班","クラス：ねがい組","Class: Wishes"],
+    pPlace:["地點：{p}","場所：{p}","Place: {p}"],
+    pDate:["日期：{d}","日付：{d}","Date: {d}"],
+    pDaily:["願望日報","ねがい日報","The Wish Daily"],
+    pIssue:["{w}　第 {n} 號","{w}　第 {n} 号","{w} · No. {n}"],
+    pPrice:["零售每份壹圓","一部 一円","ONE CENT"],
+    pShowing:["★ 本 日 放 映 ★","★ 本 日 上 映 ★","★ NOW SHOWING ★"],
+    pTicket:["戲 票","入 場 券","TICKET"],
+    pAdmit:["全票 壹圓","大人 一円","ADMIT ONE"],
+    pTrain:["普 通 車 ‧ 願 望 號","普 通 列 車 ‧ ね が い 号","LOCAL TRAIN · WISH LINE"],
+    pWishTo:["願望 → {d}","ねがい → {d}","WISH → {d}"],
+    pFare:["票價 壹圓","運賃 一円","FARE 1¢"],
+    pStampPrice:["壹圓","一円","1¢"],
+    pPost:["願望郵便","ねがい郵便","WISH POST"],
+    pFu:["福","福","LUCK"],
+    pPogA:["好","吉","JOY"],
+    pPogB:["福","福","LUCK"],
+    pPostcard:["明信片　POST CARD","郵便はがき　POST CARD","POST CARD"],
+    pGrade:["甲上","優","A+"],
+    pTeacher:["老師評語","先生より","Teacher's note"],
+    pStory:["{t}{p}本報記者今日前往採訪，鄉親都說日子平安最要緊，大家歡歡喜喜合照留念。","{t}。{p}本紙記者が本日取材したところ、地元の皆さんは「平穏な毎日がいちばん」と話し、笑顔で記念写真に収まりました。","{t}. {p} Our reporter visited today. Locals agreed that peaceful days matter most, and everyone gathered happily for a photo. "],
+    pNewsLead:["本報訊　{i}傳來好消息：","本紙特報　{i}から朗報：","SPECIAL REPORT · Good news from {i}:"],
+    pClassOf:["同 窗 留 念","卒 業 記 念","CLASS OF {y}"],
+    pSchool:["民國{r}年　願望國民學校　第{n}屆畢業","{y}年　ねがい小学校　第{n}回卒業","Wish Elementary School · Graduating Class No. {n}"],
+    pBadge:["願","願","W"],
+    pRemember:["勿忘影中人","この日を忘れずに","Remember this day"],
+    pFriends:["友誼長存","友情よ永遠に","Friends forever"],
+    pStudio:["轉來坐影業","おかえり映画社","Come Home Pictures"],
+    pRelease:["全 省 聯 映","全 国 公 開","NOW IN THEATERS"],
+    pYear:["民國{r}年","{y}年","{y}"],
+    pMonth:["{m} 月","{m} 月","{M}"]
   };
+
+  // 遠處天燈上的字
+  const LANTERN_WORDS = [
+    ["平安","健康","團圓","福","壽","好運","如意","發財"],
+    ["平安","健康","団らん","福","長寿","幸運","円満","開運"],
+    ["PEACE","HEALTH","FAMILY","LUCK","LONG LIFE","FORTUNE","JOY","HOPE"]
+  ];
 
   // 場景：[名稱, 圓圈裡的短地名, 一句話]
   const SCENES = {
@@ -210,6 +258,8 @@ const I18N = (() => {
   };
 
   const MONTHS = ["Jan.","Feb.","Mar.","Apr.","May","Jun.","Jul.","Aug.","Sep.","Oct.","Nov.","Dec."];
+  const MONTHS_FULL = ["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
+  const WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   let lang = pick();
 
   function pick(){
@@ -245,6 +295,22 @@ const I18N = (() => {
     return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
   }
 
+  // 郵戳、作業簿上的短日期
+  function shortDate(d){
+    if(lang==="zh") return `${d.getFullYear()-1911}.${d.getMonth()+1}.${d.getDate()}`;
+    if(lang==="ja") return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
+    return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+  }
+
+  function weekday(d){
+    if(lang==="zh") return "星期"+"日一二三四五六"[d.getDay()];
+    if(lang==="ja") return "日月火水木金土"[d.getDay()]+"曜日";
+    return WEEKDAYS[d.getDay()];
+  }
+
+  // 日期相關的字一次給齊：民國年、西元年、月份
+  const dateVars = d => ({r:d.getFullYear()-1911, y:d.getFullYear(), m:d.getMonth()+1, M:MONTHS_FULL[d.getMonth()]});
+
   // 拍貼角落那行字
   function caption(base,d){
     const title = scene(base).title;
@@ -268,6 +334,7 @@ const I18N = (() => {
 
   // 沒有中日文字就當英文排
   const latin = text => !/[぀-ヿ㐀-鿿]/.test(text);
+  const lanternWords = () => LANTERN_WORDS[index()];
 
   // 量著寬度換行：英文整個字一起換，中日文逐字換，標點不放在行首
   function wrap(c,text,width){
@@ -307,7 +374,7 @@ const I18N = (() => {
   return {
     get lang(){ return lang; },
     get speech(){ return LANGS[lang].speech; },
-    LANGS, ORDER, t, set, apply, scene, poseLabel, setTitle, quote, date, caption, localBlessing, fits, latin, wrap
+    LANGS, ORDER, t, set, apply, scene, poseLabel, setTitle, quote, date, shortDate, weekday, dateVars, caption, localBlessing, fits, latin, lanternWords, wrap
   };
 })();
 window.I18N = I18N;

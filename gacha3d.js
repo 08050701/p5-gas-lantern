@@ -1,7 +1,7 @@
 // 3D 扭蛋機：舊式紅色鐵殼機台。投幣、轉把手、扭蛋翻滾、掉出來、打開。
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { wornPaint, surfaceNormal, shopLight, shadeVertices, dent, agedPaper } from "./surface.js?v=20261103-1";
+import { wornPaint, surfaceNormal, shopLight, shadeVertices, dent, agedPaper } from "./surface.js?v=20261103-2";
 
 const GLOBE_CENTER = new THREE.Vector3(0,4.2,0);
 const GLOBE_R = 1.46;
@@ -27,7 +27,10 @@ function textPlane(w,h,draw,opts={}){
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const mat = new THREE.MeshStandardMaterial({map:tex,roughness:.55,metalness:0,transparent:!!opts.transparent});
-  return new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);
+  // 換語言時整張重畫
+  mesh.userData.redraw = () => { const ctx=c.getContext("2d"); ctx.clearRect(0,0,c.width,c.height); draw(ctx,c.width,c.height); tex.needsUpdate=true; };
+  return mesh;
 }
 
 // 反射只留下玻璃實際會有的量：正面幾乎透明，越靠邊緣反射越強
@@ -119,6 +122,8 @@ class Machine {
     this.renderer.setAnimationLoop(()=>this.frame());
   }
 
+  relabel(){ this.labels?.forEach(label => label.userData.redraw()); }
+
   buildMachine(){
     const m = this.rig;
     const peel = surfaceNormal(512,18,18,1.6), pitted = surfaceNormal(512,48,48,1.1,2), fibre = surfaceNormal(512,6,90,2.2,3);
@@ -167,15 +172,19 @@ class Machine {
     const sign = textPlane(1.4,.3,(c,W,H)=>{
       agedPaper(c,W,H,1);
       c.strokeStyle="#7c1c14"; c.lineWidth=9; c.strokeRect(11,11,W-22,H-22);
-      c.fillStyle="#8e2318"; c.font="700 84px 'Noto Serif TC', serif"; c.textAlign="center"; c.textBaseline="middle";
-      c.fillText("轉 來 坐",W/2,H/2+6);
+      c.fillStyle="#8e2318"; c.font=`700 ${I18N.lang==="en"?72:84}px 'Noto Serif TC', serif`; c.textAlign="center"; c.textBaseline="middle";
+      c.fillText(I18N.t("brandSign"),W/2,H/2+6,W-70);
     },{px:440});
+    this.labels = [sign];
     sign.position.set(0,2.17,FRONT+.026); m.add(sign);
     const price = textPlane(.22,.66,(c,W,H)=>{
       agedPaper(c,W,H,2);
       c.fillStyle="#3a2a1c"; c.font="700 68px 'Noto Serif TC', serif"; c.textAlign="center"; c.textBaseline="middle";
-      [..."每次壹圓"].forEach((ch,i)=>c.fillText(ch,W/2,H*(.14+i*.24)));
+      const word = I18N.t("coinSign");
+      if(I18N.latin(word)){ c.save(); c.translate(W/2,H/2); c.rotate(Math.PI/2); c.font="700 56px 'Noto Serif TC', serif"; c.fillText(word,0,4,H*.84); c.restore(); }
+      else [...word].forEach((ch,i)=>c.fillText(ch,W/2,H*(.14+i*.24)));
     },{px:440});
+    this.labels.push(price);
     price.position.set(-.68,1.58,FRONT+.026); m.add(price);
 
     const screw=(x,y,z=FRONT+.03)=>{ const head=add(new THREE.CylinderGeometry(.038,.042,.024,14).rotateX(Math.PI/2),polished,x,y,z); head.castShadow=false; const cut=add(new THREE.BoxGeometry(.06,.009,.006),dark,x,y,z+.013); cut.rotation.z=Math.random()*3; cut.castShadow=false; };
@@ -185,12 +194,14 @@ class Machine {
     add(new RoundedBoxGeometry(.26,.6,.05,4,.02),brass,SLOT.x,SLOT.y,FRONT+.02);
     add(new THREE.BoxGeometry(.05,.34,.02),dark,SLOT.x,SLOT.y,FRONT+.045);
     const gold = new THREE.MeshStandardMaterial({color:0xa98a4c,metalness:.8,roughness:.42,normalMap:pitted,normalScale:new THREE.Vector2(.1,.1)});
-    const face = textPlane(.4,.4,(c,W,H)=>{
+    const facePlane = textPlane(.4,.4,(c,W,H)=>{
       c.fillStyle="#b6965a"; c.fillRect(0,0,W,H);
       c.strokeStyle="#6f5524"; c.lineWidth=6; c.beginPath(); c.arc(W/2,H/2,W*.43,0,7); c.stroke();
       c.fillStyle="#5f4819"; c.font=`700 ${W*.5}px 'Noto Serif TC', serif`; c.textAlign="center"; c.textBaseline="middle";
-      c.fillText("壹",W/2,H/2+4);
-    }).material;
+      c.fillText(I18N.t("coinFace"),W/2,H/2+4);
+    });
+    this.labels.push(facePlane);
+    const face = facePlane.material;
     face.metalness=.45; face.roughness=.46;
     this.coin = add(new THREE.CylinderGeometry(.2,.2,.04,40).rotateZ(Math.PI/2),[gold,face,face],COIN_HOME.x,COIN_HOME.y,COIN_HOME.z);
     this.slotRing = add(new THREE.TorusGeometry(.46,.05,10,48),new THREE.MeshBasicMaterial({color:0xffd86a,transparent:true,depthWrite:false}),SLOT.x,SLOT.y,FRONT+.08);

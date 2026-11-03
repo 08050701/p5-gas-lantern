@@ -139,6 +139,7 @@ function closeLangMenu(){
 // 換語言：畫面上正在顯示的字跟著換；祝福用新的語言重寫一次
 async function onLangChange(){
   renderMusicButton();
+  window.Gacha3D?.relabel?.();
   renderGachaAction();
   renderReveal();
   if(state.wish){
@@ -399,7 +400,7 @@ async function requestBlessing(){
   try{
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
-    const response = await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"bless",wish:state.wish,lang}),signal:controller.signal});
+    const response = await fetch(GAS_URL,{method:"POST",body:JSON.stringify({action:"bless",wish:state.wish+I18N.t("aiHint"),lang}),signal:controller.signal});
     clearTimeout(timer);
     const data = await response.json();
     if(stale()) return state.blessing;
@@ -627,7 +628,7 @@ function renderQR(text,mount){
 // 手機用分享面板最穩，選「儲存影像」就進相簿；電腦才走下載
 async function downloadCollage(){
   if(!state.collage) return;
-  const name=`轉來坐-${Date.now()}.jpg`;
+  const name=`${I18N.t("brand")}-${Date.now()}.jpg`;
   try{
     const blob=await (await fetch(state.collage)).blob();
     const file=new File([blob],name,{type:"image/jpeg"});
@@ -646,7 +647,7 @@ async function showFinale(){
   checkAlbum();
   const photo=state.shots[0] ? await loadImage(state.shots[0]).catch(()=>null) : null;
   const title=I18N.scene(state.scene).title;
-  await Promise.allSettled([document.fonts.load(`700 80px 'LXGW WenKai TC'`,state.wish+title+"福平安健康團圓壽好運如意發財")]);
+  await Promise.allSettled([document.fonts.load(`700 80px 'LXGW WenKai TC'`,state.wish+title+I18N.t("lanternFu")+I18N.lanternWords().join(""))]);
   state.lantern3d=!!window.LanternSky?.open({wish:lanternWish(),photo,title});
 }
 

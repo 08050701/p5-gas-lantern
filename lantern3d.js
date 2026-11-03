@@ -1,6 +1,6 @@
 // 放天燈：夜空、山影、滿天天燈。紙上寫著自己的願望，點了火才飛上去。
 import * as THREE from "three";
-import { surfaceNormal } from "./surface.js?v=20261103-1";
+import { surfaceNormal } from "./surface.js?v=20261103-2";
 
 const clamp = (v,a=0,b=1) => Math.min(b,Math.max(a,v));
 const smooth = t => t*t*t*(t*(t*6-15)+10);
@@ -9,7 +9,6 @@ const INK = "#1d120b";
 const HAND = "'LXGW WenKai TC','Noto Serif TC',serif";
 const PANELS = ["#f7dc92","#ec8e3f","#cf3a24","#f2b348"]; // 正面、右、背、左
 const UNLIT = .34; // 沒點火時紙也要看得清楚字
-const BLESS_WORDS = ["平安","健康","團圓","福","壽","好運","如意","發財"];
 const RIDGES = [
   {z:-170,height:60,base:-8,color:"#2b2f55",seed:2.1},
   {z:-110,height:38,base:-10,color:"#1b2140",seed:5.3,lights:30},
@@ -100,8 +99,9 @@ function paperTexture({wish,photo,title}){
       c.fillStyle=seam; c.fillRect(x,0,W,H);
     });
     writeText(c,wish,3*W+110,Math.round(H*.3),W-220,Math.round(H*.56));
-    c.fillStyle=INK; c.font=`700 300px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
-    c.fillText("福",W*1.5,H*.5);
+    const fu=I18N.t("lanternFu");
+    c.fillStyle=INK; c.font=`700 ${I18N.latin(fu)?200:300}px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
+    c.fillText(fu,W*1.5,H*.5,W*.8);
     writeText(c,title,2*W+120,170,W-240,H-300);
     if(photo){
       const pw=W-120, ph=pw*.75, px=60, py=(H-ph)/2-30;
@@ -169,7 +169,9 @@ function farLanternTexture(word){
     c.shadowBlur=0;
     c.strokeStyle="rgba(120,44,12,.3)"; c.lineWidth=1.5;
     [.41,.59].forEach(k=>{ c.beginPath(); c.moveTo(w*(k+(k-.5)*.5),h*.17); c.quadraticCurveTo(w*(k+(k-.5)*1.1),h*.45,w*(k+(k-.5)*.1),h*.8); c.stroke(); });
-    c.fillStyle="rgba(60,20,8,.42)"; c.font=`700 ${word.length>1?24:36}px ${HAND}`; c.textAlign="center"; c.textBaseline="middle";
+    c.fillStyle="rgba(60,20,8,.42)"; c.textAlign="center"; c.textBaseline="middle";
+    if(I18N.latin(word)){ c.font=`700 ${word.length>6?13:17}px ${HAND}`; c.fillText(word,w/2,h*.5,w*.44); return; }
+    c.font=`700 ${word.length>1?24:36}px ${HAND}`;
     [...word].forEach((ch,i)=>c.fillText(ch,w/2,h*.48+(i-(word.length-1)/2)*26));
   });
 }
@@ -258,7 +260,8 @@ class Sky {
   }
 
   buildCrowd(){
-    const maps=BLESS_WORDS.map(farLanternTexture);
+    const maps=I18N.lanternWords().map(farLanternTexture);
+    this.crowdLang=I18N.lang;
     this.crowd=[];
     for(let i=0;i<110;i++){
       const mat=new THREE.SpriteMaterial({map:maps[i%maps.length],transparent:true,depthWrite:false,opacity:0});
@@ -279,7 +282,16 @@ class Sky {
     this.camera.updateProjectionMatrix();
   }
 
+  // 換過語言，遠處天燈上的字也換
+  relabelCrowd(){
+    if(this.crowdLang===I18N.lang) return;
+    const maps=I18N.lanternWords().map(farLanternTexture);
+    this.crowd.forEach(({s},i)=>{ s.material.map=maps[i%maps.length]; s.material.needsUpdate=true; });
+    this.crowdLang=I18N.lang;
+  }
+
   open({wish,photo,title}){
+    this.relabelCrowd();
     this.paperMat.map?.dispose(); this.paperMat.emissiveMap?.dispose();
     const {map,emissive}=paperTexture({wish,photo,title});
     this.paperMat.map=map; this.paperMat.emissiveMap=emissive; this.paperMat.needsUpdate=true;

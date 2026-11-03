@@ -10,7 +10,7 @@ const FlipAlbum = (() => {
 
   function pageHtml(page){
     if(!page) return `<div class="album-page is-blank"></div>`;
-    if(page.kind==="cover") return `<div class="album-page is-cover"><b>${I18N.t("bookTitle")}</b><span>轉來坐</span><small>${I18N.t("bookInside1")}${I18N.lang==="en"?" ":""}${I18N.t("bookInside2")}</small></div>`;
+    if(page.kind==="cover") return `<div class="album-page is-cover"><b>${I18N.t("bookTitle")}</b><span>${I18N.t("brand")}</span><small>${I18N.t("bookInside1")}${I18N.lang==="en"?" ":""}${I18N.t("bookInside2")}</small></div>`;
     if(page.kind==="end") return `<div class="album-page is-end"><b>${I18N.t("bookEnd")}</b><small>${esc(page.note||"")}</small></div>`;
     const image = page.src ? `<img src="${esc(page.src)}" alt="${esc(I18N.t("photoOf",{scene:page.scene}))}">` : `<div class="album-wait">${I18N.t("bookLoading")}</div>`;
     return `<div class="album-page">${image}<p>${esc(I18N.quote(page.wish))}</p><small>${esc(page.scene)}　${esc(page.date)}</small></div>`;

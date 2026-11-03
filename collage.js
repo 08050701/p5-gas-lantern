@@ -28,11 +28,25 @@ const PHOTO_LAYOUTS = [
   {slots:BIG_TOP,cap:0,...ROW_LAYOUT},
   {slots:BIG_LOW,cap:2,...ROW_LAYOUT}
 ];
-const CN_DAYS = "日一二三四五六";
 
 function font(c,weight,size,family=SERIF){ c.font = `${weight} ${size}px ${family}`; }
 
 function rotated(c,x,y,angle,draw){ c.save(); c.translate(x,y); c.rotate(angle); draw(); c.restore(); }
+
+// 英文不能一個字母一個字母直排：轉九十度順著寫，太長就分兩行
+function sideways(c,text,x,top,bottom,maxSize,family){
+  const span=bottom-top;
+  let size=maxSize, lines=[text];
+  for(;size>14;size-=2){
+    font(c,700,size,family);
+    lines=size<=maxSize*.8?I18N.wrap(c,text,span):[text];
+    if(lines.length<=2 && lines.every(line=>c.measureText(line).width<=span)) break;
+  }
+  rotated(c,x,(top+bottom)/2,Math.PI/2,()=>{
+    c.textAlign="center"; c.textBaseline="middle";
+    lines.forEach((line,i)=>c.fillText(line,0,(i-(lines.length-1)/2)*size*1.1));
+  });
+}
 
 function verticalText(c,text,x,centerY,gap){
   const chars=[...text], top=centerY-(chars.length-1)*gap/2;
@@ -42,6 +56,7 @@ function verticalText(c,text,x,centerY,gap){
 
 // 直書放進一段高度：字多就縮小，不切字、不壓到別的東西
 function fitVertical(c,text,x,top,bottom,maxSize,family=HAND){
+  if(I18N.latin(text)) return sideways(c,text,x,top,bottom,maxSize,family);
   const chars=[...text], gap=Math.min(maxSize*1.08,(bottom-top)/chars.length);
   font(c,700,Math.min(maxSize,gap*.94),family);
   verticalText(c,text,x,(top+bottom)/2,gap);
@@ -172,11 +187,11 @@ function bookLabel(c,x,y,scene,roc){
     c.fillStyle="#fffaf0"; c.fillRect(-w/2,-h/2,w,h); c.restore();
     c.strokeStyle="#c9402f"; c.lineWidth=3; c.strokeRect(-w/2+8,-h/2+8,w-16,h-16);
     c.fillStyle="#26415e"; c.textAlign="center"; c.textBaseline="middle";
-    font(c,700,35); c.fillText("國語作業簿",0,-82);
+    font(c,700,35); c.fillText(I18N.t("pBook"),0,-82,w-36);
     font(c,700,24,HAND); c.textAlign="left";
-    c.fillText("班級：願望班",-w/2+24,-22);
-    c.fillText(`地點：${scene.icon}`,-w/2+24,24);
-    c.fillText(`日期：${roc}`,-w/2+24,70);
+    c.fillText(I18N.t("pClass"),-w/2+24,-22,w-44);
+    c.fillText(I18N.t("pPlace",{p:scene.icon}),-w/2+24,24,w-44);
+    c.fillText(I18N.t("pDate",{d:roc}),-w/2+24,70,w-44);
   });
 }
 
@@ -205,8 +220,14 @@ function paperNews(c){
   vignette(c,"110,80,40");
 }
 
-// 小字內文：用真的字直排，看起來才像報紙
+// 小字內文：用真的字直排，看起來才像報紙；英文就橫著排滿
 function newsText(c,text,x,y,w,h){
+  if(I18N.latin(text)){
+    const size=17, lead=size+5;
+    c.fillStyle="rgba(40,34,26,.82)"; font(c,600,size); c.textAlign="left"; c.textBaseline="middle";
+    I18N.wrap(c,text.repeat(8),w).slice(0,Math.floor(h/lead)).forEach((line,i)=>c.fillText(line,x,y+i*lead+size/2));
+    return;
+  }
   const chars=[...text.repeat(40)], size=17, rows=Math.floor(h/(size+4));
   c.fillStyle="rgba(40,34,26,.82)"; font(c,600,size); c.textAlign="center"; c.textBaseline="middle";
   let i=0;
@@ -214,11 +235,11 @@ function newsText(c,text,x,y,w,h){
 }
 
 function newsMasthead(c,date,roc,serial){
-  c.fillStyle="#1d1a15"; font(c,700,112); c.textAlign="left"; c.textBaseline="middle"; c.fillText("願望日報",48,104);
+  c.fillStyle="#1d1a15"; font(c,700,112); c.textAlign="left"; c.textBaseline="middle"; c.fillText(I18N.t("pDaily"),48,104,500);
   font(c,700,24); c.textAlign="right";
-  c.fillText(`中華民國${date.getFullYear()-1911}年${date.getMonth()+1}月${date.getDate()}日`,852,62);
-  c.fillText(`星期${CN_DAYS[date.getDay()]}　第 ${serial} 號`,852,100);
-  c.fillText("零售每份壹圓",852,138);
+  c.fillText(I18N.lang==="zh"?"中華"+I18N.date(date):I18N.date(date),852,62);
+  c.fillText(I18N.t("pIssue",{w:I18N.weekday(date),n:serial}),852,100);
+  c.fillText(I18N.t("pPrice"),852,138);
   c.fillRect(44,176,812,6); c.fillRect(44,186,812,2);
 }
 
@@ -236,7 +257,7 @@ function schoolBadge(c,x,y,r,word){
   c.beginPath(); c.arc(x,y,r,0,7); c.stroke();
   c.lineWidth=2; c.beginPath(); c.arc(x,y,r-9,0,7); c.stroke();
   goldStar(c,x,y-2,r*.56,"#d8b65e");
-  c.fillStyle="#1f3450"; font(c,700,r*.32); c.textAlign="center"; c.textBaseline="middle"; c.fillText(word,x,y);
+  c.fillStyle="#1f3450"; font(c,700,r*.32); c.textAlign="center"; c.textBaseline="middle"; c.fillText(word,x,y,r*1.5);
 }
 
 // 戲院看板：深藍底、膠卷孔、手繪大字
@@ -251,7 +272,7 @@ function paperTheater(c){
 
 function paintedTitle(c,title){
   c.textAlign="center"; c.textBaseline="middle";
-  font(c,700,30); c.fillStyle="#f3e6cc"; c.fillText("★ 本 日 放 映 ★",450,52);
+  font(c,700,30); c.fillStyle="#f3e6cc"; c.fillText(I18N.t("pShowing"),450,52);
   let size=96; do{ font(c,700,size); size-=4; }while(c.measureText(title).width>760);
   c.lineWidth=12; c.strokeStyle="#a8181c"; c.lineJoin="round"; c.strokeText(title,450,128);
   c.fillStyle="#ffd95c"; c.fillText(title,450,128);
@@ -265,8 +286,8 @@ function movieTicket(c,x,y,angle,serial){
     c.strokeStyle="#7a241f"; c.lineWidth=2; c.strokeRect(-w/2+7,-h/2+7,w-14,h-14);
     c.setLineDash([6,6]); c.beginPath(); c.moveTo(w/2-58,-h/2); c.lineTo(w/2-58,h/2); c.stroke(); c.setLineDash([]);
     c.fillStyle="#7a241f"; c.textAlign="center"; c.textBaseline="middle";
-    font(c,700,34); c.fillText("戲 票",-34,-16);
-    font(c,600,19); c.fillText(`全票 壹圓`,-34,26);
+    font(c,700,34); c.fillText(I18N.t("pTicket"),-34,-16,140);
+    font(c,600,19); c.fillText(I18N.t("pAdmit"),-34,26,140);
     font(c,600,16); c.fillText(serial.slice(0,3),w/2-30,0);
   });
 }
@@ -331,12 +352,12 @@ function calendar(c,x,y,angle,date){
     c.fillStyle="#fdf8ea"; c.fillRect(-w/2,-h/2,w,h); c.restore();
     c.fillStyle="#b5281f"; c.fillRect(-w/2,-h/2,w,50);
     c.fillStyle="#fff3d6"; font(c,700,25); c.textAlign="center"; c.textBaseline="middle";
-    c.fillText(`民國${date.getFullYear()-1911}年`,0,-h/2+25);
-    c.fillStyle="#3a2a1c"; font(c,700,28); c.fillText(`${date.getMonth()+1} 月`,0,-h/2+78);
+    c.fillText(I18N.t("pYear",I18N.dateVars(date)),0,-h/2+25,w-20);
+    c.fillStyle="#3a2a1c"; font(c,700,28); c.fillText(I18N.t("pMonth",I18N.dateVars(date)),0,-h/2+78,w-20);
     const sunday=date.getDay()===0;
     c.fillStyle=sunday?"#b5281f":"#1f1a16"; font(c,700,112); c.fillText(String(date.getDate()),0,16);
-    font(c,700,27); c.fillStyle="#3a2a1c"; c.fillText(`星期${CN_DAYS[date.getDay()]}`,0,h/2-54);
-    font(c,600,22); c.fillStyle="#7a5a3a"; c.fillText(lunarText(date),0,h/2-22);
+    font(c,700,27); c.fillStyle="#3a2a1c"; c.fillText(I18N.weekday(date),0,h/2-54,w-20);
+    font(c,600,22); c.fillStyle="#7a5a3a"; c.fillText(lunarText(date),0,h/2-22,w-20);
     // 撕下來的鋸齒
     c.fillStyle="rgba(0,0,0,.28)";
     for(let i=0;i<9;i++){ c.beginPath(); c.arc(-w/2+11+i*22,-h/2-1,5,0,7); c.fill(); }
@@ -345,6 +366,11 @@ function calendar(c,x,y,angle,date){
 
 function lunarText(date){
   try{
+    if(I18N.lang!=="zh"){
+      const parts=new Intl.DateTimeFormat("en-u-ca-chinese",{month:"numeric",day:"numeric"}).formatToParts(date);
+      const month=parts.find(p=>p.type==="month").value, day=parts.find(p=>p.type==="day").value;
+      return I18N.lang==="ja"?`旧暦${month}月${day}日`:`Lunar ${month}/${day}`;
+    }
     const parts=new Intl.DateTimeFormat("zh-TW-u-ca-chinese",{month:"long",day:"numeric"}).formatToParts(date);
     const month=parts.find(p=>p.type==="month").value, day=Number(parts.find(p=>p.type==="day").value);
     const ones="一二三四五六七八九十"[(day-1)%10];
@@ -360,11 +386,12 @@ function trainTicket(c,x,y,angle,title,serial){
     c.fillStyle="#d7e3b8"; c.fillRect(-w/2,-h/2,w,h); c.restore();
     c.strokeStyle="#4a6a3a"; c.lineWidth=2; c.strokeRect(-w/2+8,-h/2+8,w-16,h-16);
     c.fillStyle="#2a3f22"; c.textBaseline="middle"; c.textAlign="center";
-    font(c,700,20); c.fillText("普 通 車 ‧ 願 望 號",0,-h/2+30);
+    font(c,700,20); c.fillText(I18N.t("pTrain"),0,-h/2+30,w-40);
+    const route=I18N.t("pWishTo",{d:dest});
     let size=42;
-    do{ font(c,700,size); size-=2; }while(c.measureText(`願望 → ${dest}`).width>w-48);
-    c.fillText(`願望 → ${dest}`,0,4);
-    font(c,600,19); c.textAlign="left"; c.fillText("票價 壹圓",-w/2+20,h/2-27);
+    do{ font(c,700,size); size-=2; }while(c.measureText(route).width>w-48);
+    c.fillText(route,0,4);
+    font(c,600,19); c.textAlign="left"; c.fillText(I18N.t("pFare"),-w/2+20,h/2-27);
     c.textAlign="right"; c.fillText(`No. ${serial}`,w/2-20,h/2-27);
     // 剪票口
   });
@@ -382,7 +409,7 @@ function pogCard(c,x,y,radius,word,angle){
     c.lineWidth=5; c.strokeStyle="#1d3f7a"; c.beginPath(); c.arc(0,0,radius-3,0,7); c.stroke();
     c.fillStyle="#fff6df"; c.beginPath(); c.arc(0,0,radius*.56,0,7); c.fill();
     c.strokeStyle="#1d3f7a"; c.lineWidth=3; c.stroke();
-    c.fillStyle="#b5281f"; font(c,700,radius*.62); c.textAlign="center"; c.textBaseline="middle"; c.fillText(word,0,3);
+    c.fillStyle="#b5281f"; font(c,700,radius*(I18N.latin(word)?.4:.62)); c.textAlign="center"; c.textBaseline="middle"; c.fillText(word,0,3,radius);
   });
 }
 
@@ -403,7 +430,7 @@ function stamp(c,x,y,angle,scene,title){
       const sw=pw/sr, sh=ph/sr;
       c.drawImage(scene,(scene.naturalWidth-sw)/2,(scene.naturalHeight-sh)/2,sw,sh,-pw/2,-h/2+18,pw,ph);
     }
-    c.fillStyle="#b5281f"; font(c,700,21); c.textAlign="left"; c.textBaseline="middle"; c.fillText("壹圓",-w/2+18,h/2-30);
+    c.fillStyle="#b5281f"; font(c,700,21); c.textAlign="left"; c.textBaseline="middle"; c.fillText(I18N.t("pStampPrice"),-w/2+18,h/2-30);
     c.textAlign="right"; font(c,600,17); c.fillStyle="#3a2a1c"; c.fillText(title,w/2-18,h/2-30,w-92);
   });
 }
@@ -415,9 +442,9 @@ function postmark(c,x,y,color,top,bottom){
     c.lineWidth=2; c.beginPath(); c.arc(0,0,84,0,7); c.stroke();
     c.beginPath(); c.moveTo(-84,-20); c.lineTo(84,-20); c.moveTo(-84,26); c.lineTo(84,26); c.stroke();
     c.textAlign="center"; c.textBaseline="middle";
-    font(c,700,24); c.fillText(top,0,-50);
-    font(c,700,27); c.fillText(bottom,0,3);
-    font(c,700,24); c.fillText("願望郵便",0,54);
+    font(c,700,24); c.fillText(top,0,-50,140);
+    font(c,700,27); c.fillText(bottom,0,3,160);
+    font(c,700,24); c.fillText(I18N.t("pPost"),0,54,140);
     c.globalAlpha=1;
   });
 }
@@ -428,7 +455,8 @@ function fuDiamond(c,x,y,size){
     c.fillStyle="#f0cf7c"; c.fillRect(-size/2,-size/2,size,size); c.restore();
     c.strokeStyle="#a12218"; c.lineWidth=4; c.strokeRect(-size/2+10,-size/2+10,size-20,size-20);
     c.rotate(-Math.PI/4);
-    c.fillStyle="#a12218"; font(c,700,size*.68); c.textAlign="center"; c.textBaseline="middle"; c.fillText("福",0,4);
+    const fu=I18N.t("pFu");
+    c.fillStyle="#a12218"; font(c,700,size*(I18N.latin(fu)?.3:.68)); c.textAlign="center"; c.textBaseline="middle"; c.fillText(fu,0,4,size*.62);
   });
 }
 
@@ -449,13 +477,18 @@ function blessing(c,text,color,x,width,top,bottom,family=HAND,rule=""){
 }
 
 // ── 組起來 ─────────────────────────────
+// 拍貼上會出現的道具字，先把字型載好
+const PROP_KEYS=["pBook","pClass","pPlace","pDate","pDaily","pIssue","pPrice","pShowing","pTicket","pAdmit","pTrain","pWishTo","pFare","pStampPrice","pPost","pFu","pPogA","pPogB","pPostcard","pGrade","pTeacher","pStory","pNewsLead","pClassOf","pSchool","pBadge","pRemember","pFriends","pStudio","pRelease","pYear","pMonth"];
+
 async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,variant=0}){
+  scene=I18N.scene(scene);
   const date=new Date(), serial=String(Math.floor(Math.random()*90000)+10000);
-  const roc=`${date.getFullYear()-1911}.${date.getMonth()+1}.${date.getDate()}`;
+  const roc=I18N.shortDate(date), years={...I18N.dateVars(date),n:Number(serial.slice(0,2))};
+  const props=PROP_KEYS.map(key=>I18N.t(key,{...years,i:scene.icon,t:scene.title,p:scene.poem,w:I18N.weekday(date),d:roc})).join("");
   const text=blessingText||I18N.t("fallbackBlessing");
   await Promise.allSettled([
     document.fonts.load(`700 40px 'LXGW WenKai TC'`,text+I18N.caption(scene,date)),
-    document.fonts.load(`700 40px 'Noto Serif TC'`,scene.title+scene.poem+"民國普通車願望號票價壹圓福好運星期月年農曆明信片郵便國語作業簿班級地點日期老師評語甲上優本報記者今日前往採訪鄉親都說子平安最要緊大家歡喜合照留念轉來坐影業全省聯映日報日報中華星期第零售每份同窗留念畢業贈言勿忘影中人友誼長存本日放映戲全學校屆")
+    document.fonts.load(`700 40px 'Noto Serif TC'`,scene.title+scene.poem+props+lunarText(date)+"中華")
   ]);
   c.canvas.width=900; c.canvas.height=1500;
   const caption=I18N.caption(scene,date);
@@ -472,7 +505,7 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,varia
     calendar(c,ax,ay,.05,date);
     ticket();
     c.fillStyle=FRAME_STYLES.album.ink; fitVertical(c,scene.title,tx,t0,t1,50);
-    pogCard(c,px,py,56,"好",.2);
+    pogCard(c,px,py,56,I18N.t("pPogA"),.2);
     blessing(c,text,FRAME_STYLES.album.ink,86,750,1254,1466);
   }else if(frame==="postcard"){
     paperPostcard(c);
@@ -487,7 +520,7 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,varia
       trainTicket(c,mx(752),1030,flip?-1.42:1.42,scene.title,serial);
     }
     c.fillStyle=FRAME_STYLES.postcard.ink; font(c,700,28); c.textAlign="left"; c.textBaseline="middle";
-    c.fillText("明信片　POST CARD",74,1262);
+    c.fillText(I18N.t("pPostcard"),74,1262);
     blessing(c,text,FRAME_STYLES.postcard.ink,74,750,1290,1464,HAND,"rgba(35,67,90,.55)");
   }else if(frame==="floral"){
     paperFloral(c);
@@ -504,28 +537,28 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,varia
     bookLabel(c,ax-(flip?-2:2),L.big?ay:232,scene,roc);
     pencil(c,bx,by+10,L.big?-.12:(flip?.5:-.5));
     goldStar(c,mx(100),L.big?1010:520,44); goldStar(c,mx(214),L.big?1240:760,34,"#d8503f");
-    gradeStamp(c,L.big?px:nx,L.big?py:1020,"甲上");
-    c.fillStyle="#c9281e"; font(c,700,34,HAND); c.textAlign="center"; c.textBaseline="middle"; c.fillText("老師評語",nx,ny);
+    gradeStamp(c,L.big?px:nx,L.big?py:1020,I18N.t("pGrade"));
+    c.fillStyle="#c9281e"; font(c,700,34,HAND); c.textAlign="center"; c.textBaseline="middle"; c.fillText(I18N.t("pTeacher"),nx,ny,220);
     blessing(c,text,FRAME_STYLES.notebook.ink,78,750,1250,1464);
   }else if(frame==="news"){
     paperNews(c);
     newsMasthead(c,date,roc,serial);
-    const story=`${scene.title}${scene.poem}本報記者今日前往採訪，鄉親都說日子平安最要緊，大家歡歡喜喜合照留念。`;
+    const story=I18N.t("pStory",{t:scene.title,p:scene.poem});
     newsText(c,story,flip?44:616,206,240,330);
     newsText(c,story,flip?598:44,560,258,306);
     newsText(c,story,flip?44:616,1006,240,270);
     place(lowSlots,"news");
     c.fillStyle="#1d1a15"; c.fillRect(44,1300,812,4);
-    font(c,700,27); c.textAlign="left"; c.textBaseline="middle"; c.fillText(`本報訊　${scene.icon}傳來好消息：`,50,1330);
+    font(c,700,27); c.textAlign="left"; c.textBaseline="middle"; c.fillText(I18N.t("pNewsLead",{i:scene.icon}),50,1330,800);
     blessing(c,text,FRAME_STYLES.news.ink,50,800,1350,1476,SERIF);
   }else if(frame==="yearbook"){
     paperYearbook(c);
-    c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,74); c.textAlign="center"; c.textBaseline="middle"; c.fillText("同 窗 留 念",450,96);
-    font(c,700,26); c.fillText(`民國${date.getFullYear()-1911}年　願望國民學校　第${Number(serial.slice(0,2))}屆畢業`,450,162);
-    schoolBadge(c,110,104,52,"願");
+    c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,74); c.textAlign="center"; c.textBaseline="middle"; c.fillText(I18N.t("pClassOf",years),450,96,560);
+    font(c,700,26); c.fillText(I18N.t("pSchool",years),450,162,640);
+    schoolBadge(c,110,104,52,I18N.t("pBadge"));
     place(lowSlots,"plain");
-    c.fillStyle=FRAME_STYLES.yearbook.ink; font(c,700,46,HAND); verticalText(c,"勿忘影中人",mx(738),372,50);
-    verticalText(c,"友誼長存",mx(170),738,50);
+    c.fillStyle=FRAME_STYLES.yearbook.ink; fitVertical(c,I18N.t("pRemember"),mx(738),250,494,46);
+    fitVertical(c,I18N.t("pFriends"),mx(170),620,856,46);
     fitVertical(c,scene.title,mx(742),984,1284,46);
     c.save(); c.shadowColor="rgba(0,0,0,.5)"; c.shadowBlur=12; c.fillStyle="#f4ead2"; c.fillRect(60,1300,780,170); c.restore();
     blessing(c,text,"#26334a",84,732,1306,1464);
@@ -534,9 +567,9 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,varia
     paintedTitle(c,scene.title);
     place(lowSlots,"plain");
     goldStar(c,mx(740),270,40,"#ffd95c"); goldStar(c,mx(800),360,28,"#ffd95c"); goldStar(c,mx(696),392,22,"#ffd95c");
-    c.fillStyle="#f3e6cc"; font(c,700,32,HAND); verticalText(c,"轉來坐影業",mx(170),738,42);
+    c.fillStyle="#f3e6cc"; fitVertical(c,I18N.t("pStudio"),mx(170),570,906,36);
     movieTicket(c,mx(742),1064,flip?.12:-.12,serial);
-    c.fillStyle="#f3e6cc"; font(c,700,26); c.textAlign="center"; c.textBaseline="middle"; c.fillText("全 省 聯 映",mx(742),1190);
+    c.fillStyle="#f3e6cc"; font(c,700,26); c.textAlign="center"; c.textBaseline="middle"; c.fillText(I18N.t("pRelease"),mx(742),1190,260);
     blessing(c,text,FRAME_STYLES.theater.ink,76,748,1300,1470);
   }else{
     paperRed(c);
@@ -544,7 +577,7 @@ async function renderCollage(c,{images,frame,scene,sceneImage,blessingText,varia
     calendar(c,ax,L.big?ay:226,.05,date);
     if(L.big) fuDiamond(c,bx,by,170); else fuDiamond(c,bx-5,640,190);
     c.fillStyle=FRAME_STYLES.red.ink; fitVertical(c,scene.title,tx,t0,t1,50);
-    pogCard(c,px,py,56,"福",-.2);
+    pogCard(c,px,py,56,I18N.t("pPogB"),-.2);
     blessing(c,text,FRAME_STYLES.red.ink,78,744,1250,1452);
   }
 }

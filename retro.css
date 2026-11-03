@@ -409,3 +409,8 @@ html[lang="en"] .eyebrow{letter-spacing:.12em}
   .lang-icon,html:not([lang="zh-Hant"]) .music-name{display:none}
   .music-toggle{padding:0 12px}
 }
+
+/* 英文招牌字比較長，平面扭蛋機上縮小一點 */
+html[lang=en] .sign-text{ font-size:27px; letter-spacing:2px; }
+html[lang=en] .coin-text{ font-size:14px; }
+html[lang=en] .brand b{ letter-spacing:.02em; }
