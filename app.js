@@ -261,11 +261,21 @@ function openWishDialog(){
   $("#wishInput").value = state.wish;
   updateCharCount();
   dialog.showModal();
+  fitWishInput();
   setTimeout(() => $("#wishInput").focus(), 80);
 }
 
 function updateCharCount(){
   $("#charCount").textContent = `${$("#wishInput").value.length} / ${WISH_MAX}`;
+  fitWishInput();
+}
+
+// 打長一點，框跟著變高，第一行不會捲上去看不到；太長才在框裡捲
+function fitWishInput(){
+  const input = $("#wishInput");
+  if(!input.offsetParent) return;
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight+2, innerHeight*.45)}px`;
 }
 
 function submitTypedWish(event){

@@ -1,7 +1,7 @@
 // 3D 扭蛋機：舊式紅色鐵殼機台。投幣、轉把手、扭蛋翻滾、掉出來、打開。
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { wornPaint, surfaceNormal, shopLight, shadeVertices, dent, agedPaper } from "./surface.js?v=20261104-1";
+import { wornPaint, surfaceNormal, shopLight, shadeVertices, dent, agedPaper } from "./surface.js?v=20261104-2";
 
 const GLOBE_CENTER = new THREE.Vector3(0,4.2,0);
 const GLOBE_R = 1.46;
