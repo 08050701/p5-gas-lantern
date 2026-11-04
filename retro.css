@@ -414,3 +414,13 @@ html[lang="en"] .eyebrow{letter-spacing:.12em}
 html[lang=en] .sign-text{ font-size:27px; letter-spacing:2px; }
 html[lang=en] .coin-text{ font-size:14px; }
 html[lang=en] .brand b{ letter-spacing:.02em; }
+
+/* 手機上按鈕字太長就換行，不要超出按鈕；相冊詢問兩個選擇上下排 */
+@media(max-width:820px){
+  .action-row .primary,.action-row .secondary{white-space:normal;line-height:1.25;overflow-wrap:break-word}
+  #albumDialog .action-row{flex-direction:column-reverse;align-items:stretch}
+  #albumDialog .action-row .primary,#albumDialog .action-row .secondary{flex:none;width:100%}
+  .dialog-card h2{font-size:30px;line-height:1.3;padding-right:30px;margin-bottom:6px}
+  .frame-chip{white-space:nowrap;letter-spacing:0}
+  html[lang=ja] .frame-chip{font-size:15px}
+}
